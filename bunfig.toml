@@ -1,3 +1,7 @@
 # La cache dei pacchetti resta nel progetto (bun run clean la cancella).
 [install.cache]
 dir = "./.tools/bun-cache"
+
+# I test del progetto stanno in tests/ (non quelli delle librerie nella cache).
+[test]
+root = "./tests"

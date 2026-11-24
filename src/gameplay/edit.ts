@@ -5,6 +5,9 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, extname, join, relative } from 'node:path';
 import { PATHS, ROOT } from '../lib/env';
+import { cropScale, DEFAULT_CROP_FFMPEG, type LucianusCrop } from '../lib/lucianus-crop';
+import { readMusicConfig } from '../lib/music-config';
+import type { MusicSegment } from './music';
 import { projectDir } from '../lib/project';
 import { estimate, exportRates, RATE, type SpaceEstimate, type SpaceItem } from '../lib/space';
 import { videoId } from '../lib/video-id';
@@ -73,6 +76,10 @@ export interface GameplayEdit {
   cuts: Cut[];
   /** posizione e grandezza di Lucianus; senza, DEFAULT_LOOK */
   look?: Look;
+  /** ritaglio del file di Lucianus (bande nere trovate dall'analisi); senza, solo i bordi della finestra */
+  lucianusCrop?: LucianusCrop;
+  /** tratti con canzoni protette e la musica libera scelta per ciascuno (src/gameplay/music.ts) */
+  music?: MusicSegment[];
   /** false: il Lucianus della registrazione non si vede (per esempio se si è bloccato); la sua voce resta */
   facecam?: boolean;
   /** pezzo di Lucianus in fondo al video */
@@ -97,11 +104,13 @@ export const mixOf = (e: GameplayEdit): AudioMix => ({ ...DEFAULT_MIX, ...e.mix 
  * Impronta di registrazione e volumi: mix e anteprima la salvano accanto a sé e si rifanno quando cambia.
  * Con un pezzo finale conta anche dove cade, cioè i tagli: la sua voce entra nel mix in quei secondi.
  */
-export function mixKey(e: GameplayEdit): string {
+export function mixKey(e: GameplayEdit, id: string): string {
   const st = statSync(e.video);
   const outro = e.outro ? { path: e.outro.path, pieces: outroPieces(e) } : undefined;
+  // il gioco senza canzoni, se c'è, al posto della traccia 1: un mix fatto prima non vale più
+  const game = readMusicConfig().enabled && existsSync(cleanGamePath(id)) ? statSync(cleanGamePath(id)).mtimeMs : undefined;
   // voice: versione della catena della voce (src/lib/voice-eq.ts), perché un mix vecchio non sembri pronto
-  return JSON.stringify({ size: st.size, mtime: st.mtimeMs, mix: mixOf(e), voice: 5, ...(outro ? { outro } : {}) });
+  return JSON.stringify({ size: st.size, mtime: st.mtimeMs, mix: mixOf(e), voice: 5, ...(outro ? { outro } : {}), ...(game ? { game } : {}) });
 }
 
 /** Il file di Lucianus senza i bordi della finestra catturata (vedi LOOK.crop): 1080×1296 → 1056×1278. */
@@ -115,6 +124,36 @@ export const DEFAULT_LOOK: Look = {
 };
 
 export const lookOf = (e: GameplayEdit | null): Look => ({ ...DEFAULT_LOOK, ...e?.look });
+
+/**
+ * Bande nere nel file di Lucianus (cropdetect in tre punti): il ritaglio che le toglie, o null se non ce ne sono.
+ * Il bordo basso resta esatto, così i personaggi poggiano sul margine del video; gli altri rientrano di 2 px.
+ */
+export function detectLucianusBars(path: string, duration: number): LucianusCrop | null {
+  const probe = Bun.spawnSync(['ffprobe', '-v', 'error', '-select_streams', 'v:0', '-show_entries', 'stream=width,height', '-of', 'csv=p=0', path]).stdout.toString().trim();
+  const [W, H] = probe.split(',').map(Number);
+  if (!W || !H) return null;
+  const boxes = [60, duration * 0.3, duration * 0.6].map((t) => {
+    const log = Bun.spawnSync(['ffmpeg', '-hide_banner', '-nostats', '-ss', String(Math.max(0, Math.floor(t))), '-t', '5', '-i', path, '-vf', 'cropdetect=limit=24:round=2:reset=0', '-f', 'null', '-'], { stderr: 'pipe' }).stderr.toString();
+    const m = [...log.matchAll(/crop=(\d+):(\d+):(\d+):(\d+)/g)].at(-1);
+    return m ? { w: Number(m[1]), h: Number(m[2]), x: Number(m[3]), y: Number(m[4]) } : null;
+  }).filter((b) => b !== null);
+  if (!boxes.length) return null;
+  // il riquadro che li contiene tutti: meglio un filo di nero che tagliare i personaggi
+  const x0 = Math.min(...boxes.map((b) => b.x));
+  const y0 = Math.min(...boxes.map((b) => b.y));
+  const x1 = Math.max(...boxes.map((b) => b.x + b.w));
+  const y1 = Math.max(...boxes.map((b) => b.y + b.h));
+  if (y1 - y0 > 0.95 * H && x1 - x0 > 0.95 * W) return null;
+  const inset = (px: number) => (px > 4 ? px + 2 : px);
+  return { top: inset(y0) / H, bottom: (H - y1) / H, left: inset(x0) / W, right: (x1 < W - 4 ? W - x1 + 2 : W - x1) / W };
+}
+
+/** Lucianus con il ritaglio nuovo: grande come prima (stessa scala), appoggiato al margine basso del video. */
+export const lookForCrop = (crop: LucianusCrop): Look => {
+  const h = DEFAULT_LOOK.h * cropScale(crop);
+  return { x: DEFAULT_LOOK.x, y: 1 - h, h };
+};
 
 /** Il Lucianus della registrazione finisce nel video? */
 export const showsFacecam = (e: GameplayEdit): boolean => !!e.lucianus && e.facecam !== false;
@@ -141,7 +180,7 @@ export function outroPieces(e: GameplayEdit): { s: number; e: number; clip: numb
 export const LOOK = {
   height: 648, // Lucianus alto il 30%
   marginRight: 560,
-  crop: 'iw-24:ih-18:12:6', // bordi della finestra catturata (angoli e riga in alto)
+  crop: DEFAULT_CROP_FFMPEG, // bordi della finestra catturata (angoli e riga in alto); vedi src/lib/lucianus-crop.ts
   key: 'colorkey=0x00B140:0.22:0.08', // il verde esatto di Lucianus: la maglia turchese resta
 };
 
@@ -160,21 +199,33 @@ export const oldPreviewPath = (id: string) => join(gameplayDir(id), 'anteprima.m
 /** Voce e gioco mixati su tutta la registrazione (FLAC a −8 dB): da qui partono anteprima ed esportazione. */
 export const mixPath = (id: string) => join(gameplayDir(id), 'mix.flac');
 export const languagePath = (id: string) => join(gameplayDir(id), 'lingua.json');
+/**
+ * Traccia del gioco con le canzoni protette sostituite (FLAC a 24 bit, sul tempo della registrazione, identica
+ * all'originale fuori dai tratti sostituiti). Se c'è, mix e tracce per gli short la usano al posto della traccia 1.
+ */
+export const cleanGamePath = (id: string) => join(gameplayDir(id), 'gioco-senza-canzoni.flac');
 export const youtubePath = (id: string) => join(keepDir(id), 'youtube.json');
 
-export type GameplayStepName = 'analizza' | 'lingua' | 'anteprima' | 'esporta' | 'archivio' | 'tracce';
+export type GameplayStepName = 'analizza' | 'lingua' | 'anteprima' | 'esporta' | 'archivio' | 'tracce' | 'canzoni' | 'musica' | 'proposte';
 
 /** Spazio che occupa un passaggio del gameplay (stime dai pesi misurati in src/lib/space.ts). */
-export function gameplaySpace(step: GameplayStepName, id: string, e: GameplayEdit | null, test?: { duration: number }): SpaceEstimate {
+/** `test`: una prova di `duration` secondi; `quick`: un video veloce da guardare, con il suo peso al secondo. */
+export function gameplaySpace(step: GameplayStepName, id: string, e: GameplayEdit | null, test?: { duration: number }, quick?: { label: string; bytesPerSecond: number }): SpaceEstimate {
   if (!e || step === 'analizza') return estimate([]);
   const rates = exportRates();
   const fin = finalDuration(e);
   let mixReady = false;
   try {
-    mixReady = existsSync(mixPath(id)) && readFileSync(`${mixPath(id)}.json`, 'utf8') === mixKey(e);
+    mixReady = existsSync(mixPath(id)) && readFileSync(`${mixPath(id)}.json`, 'utf8') === mixKey(e, id);
   } catch {}
   const mix = (temporary: boolean): SpaceItem[] => (mixReady ? [] : [{ label: 'mix di voce e gioco (FLAC)', bytes: RATE.mix * e.duration, temporary }]);
   switch (step) {
+    case 'canzoni':
+    case 'proposte':
+      return estimate([]);
+    case 'musica':
+      // gioco originale (temporaneo) e gioco senza canzoni, FLAC a 24 bit: misurati circa 0,6 Mbit/s ciascuno
+      return estimate([{ label: 'gioco senza canzoni (FLAC)', bytes: 80_000 * e.duration }, { label: 'gioco originale (temporaneo)', bytes: 80_000 * e.duration, temporary: true }]);
     case 'lingua':
       return estimate([{ label: 'voce a 16 kHz (temporanea)', bytes: RATE.voice16k * e.duration, temporary: true }]);
     case 'anteprima':
@@ -184,12 +235,12 @@ export function gameplaySpace(step: GameplayStepName, id: string, e: GameplayEdi
     case 'tracce':
       return estimate([{ label: 'gioco e voce separati', bytes: RATE.tracks * fin }]);
     case 'esporta':
+      if (quick) return estimate([...mix(false), { label: quick.label, bytes: quick.bytesPerSecond * (test?.duration ?? fin) }]);
       if (test) return estimate([...mix(false), { label: 'prova 4K', bytes: rates.final * test.duration }]);
       return estimate(
         [
           ...mix(true),
           { label: 'video finale 4K', bytes: rates.final * fin },
-          { label: 'copia a 720p per rivedere', bytes: rates.archive * fin },
           { label: 'gioco e voce separati per gli short', bytes: RATE.tracks * fin },
         ],
         'a fine export si cancellano mix e audio dell’anteprima',
@@ -339,12 +390,15 @@ export function writeEdit(id: string, e: GameplayEdit): GameplayEdit {
 const round = (s: number) => Math.round(s * 100) / 100;
 export const cutId = () => crypto.randomUUID().slice(0, 8);
 
-/** Sostituisce i tagli automatici di un motivo; quelli toccati a mano restano come sono. */
-export function replaceAuto(e: GameplayEdit, reason: CutReason, found: { start: number; end: number; note?: string }[]): GameplayEdit {
+/**
+ * Sostituisce i tagli automatici di un motivo; quelli toccati a mano restano come sono. Con `enabled` false i
+ * nuovi sono proposte: si vedono sulla timeline e si attivano a mano (così i menu, dal 24/11).
+ */
+export function replaceAuto(e: GameplayEdit, reason: CutReason, found: { start: number; end: number; note?: string }[], enabled = true): GameplayEdit {
   const kept = e.cuts.filter((c) => c.reason !== reason || c.edited);
   const fresh = found
     .filter((f) => !kept.some((k) => k.reason === reason && overlap(k, f) > 0))
-    .map((f): Cut => ({ id: cutId(), start: f.start, end: f.end, reason, enabled: true, ...(f.note ? { note: f.note } : {}) }));
+    .map((f): Cut => ({ id: cutId(), start: f.start, end: f.end, reason, enabled, ...(f.note ? { note: f.note } : {}) }));
   return { ...e, cuts: [...kept, ...fresh] };
 }
 

@@ -6,17 +6,16 @@
 // trascinandolo: valgono anche per il video finale. Il pezzo finale (un Lucianus registrato a parte) compare
 // negli ultimi secondi del video finale, con la sua voce al posto di quella del gameplay.
 import { type PointerEvent as ReactPointerEvent, type RefObject, useCallback, useEffect, useRef, useState } from 'react';
+import { cropAspect, cropOf, cropScale, type LucianusCrop } from '../../../src/lib/lucianus-crop';
 import type { Look } from '../../../src/gameplay/edit';
 import { VOICE_PRESETS, type VoicePreset, voiceProfile } from '../../../src/lib/voice-eq';
 
 // Gli stessi valori di LOOK in src/gameplay/edit.ts (che qui non si importa: usa il file system):
-// crop 'iw-24:ih-18:12:6', colorkey=0x00B140:0.22:0.08.
-const CROP = { left: 12, top: 6, right: 12, bottom: 12 };
+// colorkey=0x00B140:0.22:0.08. Il ritaglio è quello di src/lib/lucianus-crop.ts (di base i bordi della finestra,
+// o le bande nere trovate dall'analisi).
 const KEY = { color: [0x00 / 255, 0xb1 / 255, 0x40 / 255], similarity: 0.22, blend: 0.08 };
-/** LUCIANUS_ASPECT di edit.ts: il file di Lucianus senza i bordi, 1056×1278 */
-const LUC_ASPECT = 1056 / 1278;
-/** larghezza di Lucianus in frazioni della larghezza del video 16:9, data l'altezza in frazioni */
-const widthOf = (h: number) => h * (9 / 16) * LUC_ASPECT;
+/** larghezza di Lucianus in frazioni della larghezza del video 16:9, data l'altezza in frazioni e le sue proporzioni */
+const widthOf = (h: number, aspect: number) => h * (9 / 16) * aspect;
 const clampLook = (l: Look): Look => ({
   h: Math.min(1.5, Math.max(0.05, l.h)),
   x: Math.min(0.98, Math.max(-0.9, l.x)),
@@ -41,7 +40,7 @@ void main() { vec4 c = texture2D(tex, uv); float d = distance(c.rgb, key) / sqrt
   float a = d < sb.x ? 0.0 : (sb.y > 0.0 ? clamp((d - sb.x) / sb.y, 0.0, 1.0) : 1.0); gl_FragColor = vec4(c.rgb * a, a); }`;
 
 /** `src`: il file che si sta scontornando; se cambia (o compare dopo) si ricomincia. */
-function useKeyer(canvas: RefObject<HTMLCanvasElement | null>, source: RefObject<HTMLVideoElement | null>, src: string | null) {
+function useKeyer(canvas: RefObject<HTMLCanvasElement | null>, source: RefObject<HTMLVideoElement | null>, src: string | null, cropFr?: LucianusCrop) {
   useEffect(() => {
     const cv = canvas.current;
     const v = source.current;
@@ -75,6 +74,8 @@ function useKeyer(canvas: RefObject<HTMLCanvasElement | null>, source: RefObject
     const draw = () => {
       if (stop) return;
       if (v.readyState >= 2 && v.videoWidth) {
+        const c = cropOf(cropFr);
+        const CROP = { left: c.left * v.videoWidth, right: c.right * v.videoWidth, top: c.top * v.videoHeight, bottom: c.bottom * v.videoHeight };
         const w = v.videoWidth - CROP.left - CROP.right;
         const h = v.videoHeight - CROP.top - CROP.bottom;
         if (cv.width !== Math.round(w / 2)) {
@@ -99,7 +100,7 @@ function useKeyer(canvas: RefObject<HTMLCanvasElement | null>, source: RefObject
       if ('cancelVideoFrameCallback' in v) v.cancelVideoFrameCallback(handle);
       else cancelAnimationFrame(handle);
     };
-  }, [canvas, source, src]);
+  }, [canvas, source, src, cropFr]);
 }
 
 /** Volumi del mixer dell'anteprima: valgono solo per ascoltare, l'export usa quelli di "Voce e gioco". */
@@ -239,6 +240,8 @@ export function RecordingPlayer({
   facecam,
   outro,
   removed,
+  lucianusCrop,
+  gameSegments,
 }: {
   video: RefObject<HTMLVideoElement | null>;
   src: string;
@@ -263,9 +266,17 @@ export function RecordingPlayer({
   outro: OutroView | null;
   /** tratti tolti, in secondi della registrazione: servono per sapere dove cade il pezzo finale */
   removed: [number, number][];
+  /** ritaglio del file di Lucianus (bande nere); senza, i bordi della finestra */
+  lucianusCrop?: LucianusCrop | null;
+  /** tratti con la musica sostituita: lì il gioco si sente dal tratto ricostruito, non dalla registrazione */
+  gameSegments?: { start: number; end: number; url: string }[];
 }) {
   const luc = useRef<HTMLVideoElement>(null);
   const snd = useRef<HTMLAudioElement>(null);
+  const segAudio = useRef<HTMLAudioElement>(null);
+  const [curSeg, setCurSeg] = useState<{ start: number; end: number; url: string } | null>(null);
+  const curSegRef = useRef(curSeg);
+  curSegRef.current = curSeg;
   const canvas = useRef<HTMLCanvasElement>(null);
   const outroVideo = useRef<HTMLVideoElement>(null);
   const outroCanvas = useRef<HTMLCanvasElement>(null);
@@ -288,7 +299,8 @@ export function RecordingPlayer({
       return next;
     });
   }, []);
-  useKeyer(canvas, luc, lucianus);
+  useKeyer(canvas, luc, lucianus, lucianusCrop ?? undefined);
+  const aspect = cropAspect(lucianusCrop ?? undefined);
   const mode = mixer.mode === 'mix' && audio ? 'mix' : 'tracce';
   // nel pezzo finale parla lui: la voce del gameplay tace (come nel video finale)
   const boosted = useVoiceGain(luc, mixer.voice, mixer.voiceMuted || inOutro, mode === 'tracce', clearVoice, preset);
@@ -324,23 +336,31 @@ export function RecordingPlayer({
   };
   // la grandezza dal cursore tiene fermo il centro di Lucianus
   const resize = (h: number) => {
-    const cx = shown.x + widthOf(shown.h) / 2;
+    const cx = shown.x + widthOf(shown.h, aspect) / 2;
     const cy = shown.y + shown.h / 2;
-    const next = clampLook({ h, x: cx - widthOf(h) / 2, y: cy - h / 2 });
+    const next = clampLook({ h, x: cx - widthOf(h, aspect) / 2, y: cy - h / 2 });
     setDraft(next);
     return next;
   };
   // quando arriva la posizione salvata, la bozza non serve più
   useEffect(() => setDraft(null), [look.x, look.y, look.h]);
-  const lookStyle = { left: `${shown.x * 100}%`, top: `${shown.y * 100}%`, height: `${shown.h * 100}%`, aspectRatio: '1056 / 1278' } as const;
+  const lookStyle = { left: `${shown.x * 100}%`, top: `${shown.y * 100}%`, height: `${shown.h * 100}%`, aspectRatio: String(aspect) } as const;
+  // il pezzo finale ha il ritaglio di base: stessa scala dei personaggi, appoggiato allo stesso margine basso
+  const outroH = shown.h / cropScale(lucianusCrop ?? undefined);
+  const outroStyle = { left: `${shown.x * 100}%`, top: `${(shown.y + shown.h - outroH) * 100}%`, height: `${outroH * 100}%`, aspectRatio: String(cropAspect(undefined)) } as const;
 
-  // gioco: la traccia 1 della registrazione, nel video principale
+  // gioco: la traccia 1 della registrazione, nel video principale; nei tratti con la musica sostituita, il tratto ricostruito
   useEffect(() => {
     const v = video.current;
     if (!v) return;
-    v.muted = mode === 'mix' || mixer.gameMuted;
+    v.muted = mode === 'mix' || mixer.gameMuted || !!curSeg;
     v.volume = mixer.game;
-  }, [video, mode, mixer.game, mixer.gameMuted]);
+    const a = segAudio.current;
+    if (a) {
+      a.muted = mode === 'mix' || mixer.gameMuted;
+      a.volume = mixer.game;
+    }
+  }, [video, mode, mixer.game, mixer.gameMuted, curSeg]);
 
   // G e V: mute veloce di gioco e voce; C: equalizzazione sì o no; 0–7: tipo di voce (fuori dai campi di testo)
   useEffect(() => {
@@ -366,8 +386,17 @@ export function RecordingPlayer({
       ...(luc.current ? [{ el: luc.current as HTMLMediaElement, at: (t: number) => t - offsetMs / 1000 }] : []),
       // il pezzo finale sta nel tempo del video finale: senza i tratti tolti
       ...(outro && outroVideo.current ? [{ el: outroVideo.current as HTMLMediaElement, at: (t: number) => toFinal(removed, t) - outro.start }] : []),
+      ...(curSegRef.current && segAudio.current ? [{ el: segAudio.current as HTMLMediaElement, at: (t: number) => t - curSegRef.current!.start }] : []),
     ];
     const sync = (force: boolean) => {
+      // dentro un tratto con la musica sostituita?
+      const seg = gameSegments?.find((x) => v.currentTime >= x.start && v.currentTime < x.end) ?? null;
+      if (seg?.url !== curSegRef.current?.url) {
+        curSegRef.current = seg;
+        setCurSeg(seg);
+        if (!seg && segAudio.current) segAudio.current.pause();
+        force = true;
+      }
       if (outro) {
         const o = toFinal(removed, v.currentTime) - outro.start;
         setInOutro(o >= 0 && o < outro.duration);
@@ -407,7 +436,7 @@ export function RecordingPlayer({
       for (const e of events) v.removeEventListener(e, hard);
       clearInterval(timer);
     };
-  }, [video, offsetMs, audio, lucianus, mode, outro, removed]);
+  }, [video, offsetMs, audio, lucianus, mode, outro, removed, gameSegments]);
 
   return (
     <div style={{ width: 'min(100%, calc(62vh * 16 / 9))', margin: '0 auto' }}>
@@ -442,7 +471,7 @@ export function RecordingPlayer({
         {outro && (
           <>
             <video ref={outroVideo} src={outro.url} playsInline preload="auto" style={{ display: 'none' }} />
-            <canvas ref={outroCanvas} style={{ position: 'absolute', ...lookStyle, pointerEvents: 'none', visibility: inOutro ? 'visible' : 'hidden' }} />
+            <canvas ref={outroCanvas} style={{ position: 'absolute', ...outroStyle, pointerEvents: 'none', visibility: inOutro ? 'visible' : 'hidden' }} />
           </>
         )}
         {editing && (
@@ -465,6 +494,7 @@ export function RecordingPlayer({
           </div>
         )}
         {audio && <audio ref={snd} src={audio} preload="auto" />}
+        {gameSegments?.length ? <audio ref={segAudio} src={curSeg?.url} preload="auto" /> : null}
         {error && (
           <div className="empty" style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', padding: 20, textAlign: 'center' }}>
             {error}

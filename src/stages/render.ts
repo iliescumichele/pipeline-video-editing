@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { ROOT } from '../lib/env';
 import { finalToRecording, gameplayOf, LOOK } from '../gameplay/edit';
 import { ffmpeg, probe } from '../lib/ff';
+import { cropFilter, cropScale } from '../lib/lucianus-crop';
 import { py } from '../lib/py';
 import type { SignalName } from '../lib/signal';
 import { stage, stamp, type Ctx } from '../lib/stage';
@@ -48,7 +49,9 @@ export function render(ctx: Ctx, ing: Ingest, tr: TranscribeResult, sig: Signals
   // Dalla dashboard: ganci corretti a mano e short scartati, { "s01": { "hook": "..." }, "s03": { "skip": true } }.
   const overridesPath = join(ctx.workDir, 'overrides.json');
   const overrides = (existsSync(overridesPath) ? JSON.parse(readFileSync(overridesPath, 'utf8')) : {}) as Record<string, { hook?: string; skip?: boolean }>;
-  const key = { VERSION, after: stamp(ctx, '07-copy'), remotionSrc, vertical: ctx.vertical, overrides };
+  // ritaglio di Lucianus scelto nel gameplay (bande nere): se cambia, la facecam si rifà
+  const lucianusCrop = ctx.vertical ? undefined : gameplayOf(ctx.video)?.edit.lucianusCrop;
+  const key = { VERSION, after: stamp(ctx, '07-copy'), remotionSrc, vertical: ctx.vertical, overrides, ...(lucianusCrop ? { lucianusCrop } : {}) };
   const todo = shorts.filter((sh) => !overrides[sh.id]?.skip);
   if (todo.length < shorts.length) console.log(`  ${shorts.length - todo.length} short scartati: non si rifanno`);
   return stage(ctx, '08-render', key, async () => {
@@ -67,7 +70,7 @@ export function render(ctx: Ctx, ing: Ingest, tr: TranscribeResult, sig: Signals
       // Ogni short fuori dalla cartella della fase, con la sua chiave: se cambia solo un gancio si rifà solo quello.
       const sdir = join(ctx.workDir, '08-render-shorts', sh.id);
       const cachePath = join(sdir, 'rendered.json');
-      const shortKey = Bun.hash(JSON.stringify({ VERSION, after: key.after, remotionSrc, vertical: ctx.vertical, hook: overrides[sh.id]?.hook, sh, v })).toString();
+      const shortKey = Bun.hash(JSON.stringify({ VERSION, after: key.after, remotionSrc, vertical: ctx.vertical, hook: overrides[sh.id]?.hook, sh, v, lucianusCrop })).toString();
       const cached = existsSync(cachePath) ? (JSON.parse(readFileSync(cachePath, 'utf8')) as { key: string; result: Rendered }) : null;
       if (cached?.key === shortKey && existsSync(cached.result.video)) {
         console.log(`  ${sh.id} uguale a prima, si tiene`);
@@ -95,11 +98,13 @@ export function render(ctx: Ctx, ing: Ingest, tr: TranscribeResult, sig: Signals
       ]);
       // Lucio: stessi pezzi del suo file (in ritardo di offsetMs come nell'export), senza il verde, con la trasparenza
       let facecam: string | undefined;
+      // senza bande nere l'immagine è più bassa: si riduce in proporzione, così i personaggi restano grandi uguali
+      const camHeight = Math.round(CAM.height * cropScale(g?.edit.lucianusCrop));
       if (gameplay) {
         facecam = 'facecam.mov';
         await ffmpeg([
           ...segmentInputs(g!.lucianus!, segs, -(g!.edit.offsetMs ?? 0) / 1000),
-          '-filter_complex', `${concatFilter(segs.length, 0, 'v', 'c')};[c]fps=${fps},crop=${LOOK.crop},format=rgba,${LOOK.key},scale=-2:${CAM.height * 2}:flags=lanczos,format=yuva444p10le[v]`,
+          '-filter_complex', `${concatFilter(segs.length, 0, 'v', 'c')};[c]fps=${fps},${cropFilter(g!.edit.lucianusCrop)},format=rgba,${LOOK.key},scale=-2:${camHeight * 2}:flags=lanczos,format=yuva444p10le[v]`,
           '-map', '[v]', '-an', '-c:v', 'prores_ks', '-profile:v', '4444', '-pix_fmt', 'yuva444p10le', join(sdir, facecam),
         ]);
       }
@@ -170,7 +175,7 @@ export function render(ctx: Ctx, ing: Ingest, tr: TranscribeResult, sig: Signals
       const props = {
         fps, duration: Math.round(dur * fps) / fps, layout, src: 'clip.mp4', bg, srcWidth: cw, srcHeight: ch, crop,
         hook: overrides[sh.id]?.hook ?? sh.copy.hook, lines, zooms, captionY, hookY: layout === 'gameplay' ? 760 : 250, blurTop, loopSeconds: 0.35,
-        ...(layout === 'gameplay' ? { facecam, content: CONTENT, cam: CAM, fit } : {}),
+        ...(layout === 'gameplay' ? { facecam, content: CONTENT, cam: { ...CAM, height: camHeight }, fit } : {}),
       };
       const propsPath = join(sdir, 'props.json');
       await Bun.write(propsPath, JSON.stringify(props));

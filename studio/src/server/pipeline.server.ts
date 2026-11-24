@@ -7,7 +7,7 @@ import { files, inside, knownVideoPaths, MOVIES, recordingFolders, runs, runStat
 import { DATA, db, now } from '../../../src/dashboard/db';
 import { cancel, enqueue, jobLog, listJobs } from '../../../src/dashboard/jobs';
 import {
-  archivePath, isAnalyzed, newEdit, type AudioMix, type Cut, DEFAULT_LOOK, DEFAULT_MIX, type Duck, exportPath, fileTitle, finalDuration, type GameplayEdit, gameplayIds, languagePath, type Look, lookOf, lucianusFor, mixKey, mixOf, posterPath,
+  archivePath, cutId, isAnalyzed, newEdit, type AudioMix, type Cut, DEFAULT_LOOK, DEFAULT_MIX, type Duck, exportPath, fileTitle, finalDuration, type GameplayEdit, gameplayIds, languagePath, type Look, lookOf, lucianusFor, mixKey, mixOf, posterPath,
   previewPath, readEdit, gameplaySpace, tracksPath, writeEdit, youtubePath,
 } from '../../../src/gameplay/edit';
 import { estimate, freeBytes, MARGIN, shortsSpace, type SpaceEstimate } from '../../../src/lib/space';
@@ -15,6 +15,8 @@ import { generateYoutube, images, REFERENCES, ROCKSTAR, THUMBS, type Youtube } f
 import { PATHS } from '../../../src/lib/env';
 import { VOICE_PRESETS } from '../../../src/lib/voice-eq';
 import { DEFAULT_EXPORT, type ExportSettings, readExport, writeExport } from '../../../src/lib/export-settings';
+import { libraryDir } from '../../../src/lib/music-config';
+import { libraryTracks, type MusicSegment, musicReady, musicReportPath, previewAudioPath, readDetectStatus, readProposals } from '../../../src/gameplay/music';
 import { projectDir, publishDir } from '../../../src/lib/project';
 import { ROUTING_PATH, readRouting, type RoutingFile } from '../../../src/lib/routing';
 import { type Asset, type Manifest, manifestPath } from '../../../src/news/assets';
@@ -42,10 +44,10 @@ export type JobRequest =
   | { kind: 'media' }
   | { kind: 'assets'; script: number }
   | { kind: 'montage'; script: number }
-  | { kind: 'gameplay'; step: GameplayStep; video: string; from?: number; duration?: number }
+  | { kind: 'gameplay'; step: GameplayStep; video: string; from?: number; duration?: number; segment?: string }
   | { kind: 'gameplay-archive'; id: string };
 
-export type GameplayStep = 'analizza' | 'lingua' | 'anteprima' | 'esporta' | 'archivio' | 'tracce';
+export type GameplayStep = 'analizza' | 'lingua' | 'anteprima' | 'esporta' | 'archivio' | 'tracce' | 'canzoni' | 'musica' | 'proposte';
 const GAMEPLAY_TITLES: Record<GameplayStep, string> = {
   analizza: 'Gameplay: menu e sincronia',
   lingua: 'Gameplay: parti in rumeno',
@@ -53,6 +55,9 @@ const GAMEPLAY_TITLES: Record<GameplayStep, string> = {
   esporta: 'Gameplay: video finale 4K',
   archivio: 'Gameplay: copia a 720p per rivedere',
   tracce: 'Gameplay: gioco e voce separati per gli short',
+  canzoni: 'Gameplay: canzoni protette (Shazam)',
+  musica: 'Gameplay: gioco senza canzoni',
+  proposte: 'Gameplay: proposte di musica libera',
 };
 
 /**
@@ -131,6 +136,7 @@ export function startJob(r: JobRequest) {
       if (!(r.step in GAMEPLAY_TITLES)) throw new Error('passaggio sconosciuto');
       const argv = bun('src/gameplay/gameplay.ts', r.step, r.video);
       const test = r.step === 'esporta' && r.from !== undefined;
+      if (r.step === 'proposte' && r.segment) argv.push('--tratto', r.segment.replace(/[^a-z0-9-]/gi, '').slice(0, 24));
       if (test) argv.push('--da', String(Math.max(0, Math.floor(r.from ?? 0))), '--durata', String(Math.min(120, Math.max(5, Math.floor(r.duration ?? 30)))));
       return enqueue('gameplay', `${GAMEPLAY_TITLES[r.step]}${test ? ' (prova)' : ''} · ${r.video.split('/').pop()}`, argv);
     }
@@ -201,7 +207,7 @@ const recording = (id: string) => videos().find((x) => x.id === id && !inside(x.
 function previewStale(id: string, e: GameplayEdit): boolean {
   const key = `${previewPath(id)}.json`;
   try {
-    return !existsSync(key) || readFileSync(key, 'utf8') !== mixKey(e);
+    return !existsSync(key) || readFileSync(key, 'utf8') !== mixKey(e, id);
   } catch {
     return true;
   }
@@ -227,6 +233,13 @@ export function gameplay(id: string) {
     recording: recordingUrl(path),
     lucianusUrl: lucianus ? recordingUrl(lucianus) : null,
     look: lookOf(edit),
+    lucianusCrop: stored?.lucianusCrop ?? null,
+    // canzoni protette: i tratti con l'anteprima del gioco ricostruito, la libreria, e se va rifatto
+    music: (stored?.music ?? []).map((s) => ({ ...s, preview: fileInfo(previewAudioPath(id, s.id))?.url ?? null, proposals: proposalsView(id, s.id) })),
+    musicReady: stored ? musicReady(id, stored) : true,
+    musicDetect: readDetectStatus(id),
+    musicReport: existsSync(musicReportPath(id)) ? fileInfo(musicReportPath(id))!.url : null,
+    library: libraryTracks().map((t) => ({ ...t, listen: fileInfo(t.file)?.url ?? null })),
     defaultLook: DEFAULT_LOOK,
     facecam: edit?.facecam !== false,
     outro: edit?.outro ? { ...edit.outro, name: basename(edit.outro.path), url: recordingUrl(edit.outro.path), missing: !existsSync(edit.outro.path) } : null,
@@ -250,6 +263,106 @@ export function gameplay(id: string) {
 }
 
 /** Salva i tagli rivisti a mano. */
+/** Salva i tratti con canzoni protette e la musica scelta per ciascuno (la ricostruzione la fa il passaggio "musica"). */
+export function saveMusic(id: string, segments: MusicSegment[]) {
+  const rec = readEdit(id) ? null : recording(id);
+  const e = readEdit(id) ?? (rec ? writeEdit(id, newEdit(rec.path, rec.duration)) : null);
+  if (!e) throw new Error('video non trovato');
+  const lib = libraryTracks();
+  const clean = segments
+    .map((s): MusicSegment => {
+      const start = Math.max(0, Math.min(e.duration, Number(s.start)));
+      const end = Math.max(0, Math.min(e.duration, Number(s.end)));
+      if (!(end - start >= 1)) throw new Error('un tratto deve durare almeno 1 secondo');
+      const track = s.choice ? lib.find((t) => t.file === s.choice!.file) : undefined;
+      if (s.choice && !track) throw new Error('la musica scelta non è nella libreria');
+      const mode = s.mode && ['auto', 'sostituisci', 'aggiungi'].includes(s.mode) ? s.mode : 'auto';
+      return {
+        id: String(s.id).replace(/[^a-z0-9-]/gi, '').slice(0, 24) || cutId(),
+        start, end, mode,
+        source: s.source === 'rilevata' ? 'rilevata' : 'manuale',
+        ...(s.song?.title ? { song: { title: String(s.song.title).slice(0, 120), ...(s.song.artist ? { artist: String(s.song.artist).slice(0, 120) } : {}), ...(s.song.url ? { url: String(s.song.url) } : {}) } } : {}),
+        ...(Number.isFinite(Number(s.addLevelDb)) && s.addLevelDb ? { addLevelDb: Math.max(-20, Math.min(12, Number(s.addLevelDb))) } : {}),
+        ...(s.style ? { style: String(s.style).slice(0, 200) } : {}),
+        ...(track ? { choice: { file: track.file, title: track.title, artist: track.artist, origin: track.origin, url: track.url, license: track.license, attribution: track.attribution } } : {}),
+      };
+    })
+    .sort((a, b) => a.start - b.start);
+  for (let i = 1; i < clean.length; i++) if (clean[i]!.start < clean[i - 1]!.end) throw new Error('due tratti di musica si sovrappongono');
+  return writeEdit(id, { ...e, music: clean });
+}
+
+/** Le proposte di un tratto, con i link per ascoltarle; quelle del catalogo dicono se il brano è già in libreria. */
+function proposalsView(id: string, segId: string) {
+  const p = readProposals(id, segId);
+  if (!p) return null;
+  const lib = libraryTracks();
+  return {
+    source: p.source,
+    bpm: p.bpm ?? null,
+    note: p.note ?? null,
+    at: p.at,
+    library: p.library.flatMap((x) => {
+      const t = lib.find((l) => l.file === x.file);
+      return t ? [{ ...t, score: x.score, bpm: x.bpm, listen: fileInfo(t.file)?.url ?? null }] : [];
+    }),
+    catalog: p.catalog.map((x) => ({ ...x, inLibrary: lib.find((l) => l.origin === 'incompetech' && l.title === x.title)?.file ?? null })),
+  };
+}
+
+/** Un brano del catalogo di Kevin MacLeod nella libreria, con la sua attribuzione (CC BY 4.0). Solo da incompetech.com. */
+export async function addCatalogTrack(piece: { title: string; url: string }) {
+  const u = new URL(piece.url);
+  if (u.hostname !== 'incompetech.com' || !u.pathname.endsWith('.mp3')) throw new Error('solo brani di incompetech.com');
+  const name = fileTitle(`Kevin MacLeod - ${piece.title}`);
+  const dir = libraryDir();
+  mkdirSync(dir, { recursive: true });
+  const res = await fetch(u, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+  if (!res.ok) throw new Error(`download non riuscito (${res.status})`);
+  await Bun.write(join(dir, `${name}.mp3`), await res.arrayBuffer());
+  const attribution = `"${piece.title}" Kevin MacLeod (incompetech.com)\nLicensed under Creative Commons: By Attribution 4.0 License\nhttp://creativecommons.org/licenses/by/4.0/`;
+  writeFileSync(join(dir, `${name}.json`), `${JSON.stringify({ title: piece.title, artist: 'Kevin MacLeod', origin: 'incompetech', url: u.toString(), license: 'CC BY 4.0', attribution }, null, 2)}\n`);
+  const track = libraryTracks().find((t) => basename(t.file, extname(t.file)) === name);
+  if (!track) throw new Error('il file scaricato non si trova');
+  return track;
+}
+
+/**
+ * Aggiunge alla libreria un brano da un link YouTube (per esempio della YouTube Audio Library): audio e scheda
+ * con titolo, autore, link e licenza. Solo youtube.com e youtu.be.
+ */
+export async function importMusicLink(link: string) {
+  let u: URL;
+  try {
+    u = new URL(link.trim());
+  } catch {
+    throw new Error('link non valido');
+  }
+  if (!/(^|\.)(youtube\.com|youtu\.be)$/.test(u.hostname)) throw new Error('per ora solo link di YouTube');
+  const ytdlp = join(PATHS.venv, 'bin', 'yt-dlp');
+  const info = Bun.spawnSync([ytdlp, '--no-playlist', '-J', u.toString()], { stdout: 'pipe', stderr: 'pipe' });
+  if (info.exitCode !== 0) throw new Error(`YouTube non risponde: ${info.stderr.toString().trim().split('\n').at(-1)}`);
+  const j = JSON.parse(info.stdout.toString()) as { id: string; title: string; uploader?: string; channel?: string; artist?: string; track?: string; description?: string; webpage_url?: string; duration?: number };
+  const artist = (j.artist ?? j.uploader ?? j.channel ?? '').replace(/^Official\s+/i, '').replace(/\s*-\s*Topic$/i, '').trim() || 'YouTube';
+  const title = (j.track ?? j.title).trim();
+  const audioLibrary = /YouTube Audio Library/i.test(j.description ?? '');
+  const name = fileTitle(`${artist} - ${title}`);
+  const dir = libraryDir();
+  mkdirSync(dir, { recursive: true });
+  const dl = Bun.spawnSync([ytdlp, '--no-playlist', '-f', 'bestaudio', '-o', join(dir, `${name}.%(ext)s`), u.toString()], { stdout: 'pipe', stderr: 'pipe' });
+  if (dl.exitCode !== 0) throw new Error(`download non riuscito: ${dl.stderr.toString().trim().split('\n').at(-1)}`);
+  const meta = {
+    title, artist, origin: 'youtube', url: j.webpage_url ?? u.toString(),
+    license: audioLibrary ? 'YouTube Audio Library' : 'da verificare',
+    attribution: audioLibrary ? `${title} · ${artist} (YouTube Audio Library)` : `${title} · ${artist}`,
+    duration: j.duration,
+  };
+  writeFileSync(join(dir, `${name}.json`), `${JSON.stringify(meta, null, 2)}\n`);
+  const track = libraryTracks().find((t) => basename(t.file, extname(t.file)) === name);
+  if (!track) throw new Error('il file scaricato non si trova');
+  return { ...track, warning: audioLibrary ? null : 'Non sembra della YouTube Audio Library: controlla tu la licenza prima di usarlo.' };
+}
+
 export function saveGameplayCuts(id: string, cuts: Cut[]) {
   // tagli segnati prima dell'analisi: lo stato nasce qui, e l'analisi non tocca quelli fatti a mano
   const rec = readEdit(id) ? null : recording(id);

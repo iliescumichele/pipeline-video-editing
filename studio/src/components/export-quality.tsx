@@ -48,9 +48,6 @@ export function ExportQuality({ seconds }: { seconds?: number }) {
           video finale <b>{num(cur.final.videoMbps)} Mbit/s</b> HEVC · audio {cur.final.audioKbps}k · ≈ {gbText(perHour(cur.final.videoMbps, cur.final.audioKbps))} all’ora
           {seconds ? ` (questo ≈ ${gbText((perHour(cur.final.videoMbps, cur.final.audioKbps) / 3600) * seconds)})` : ''}
         </span>
-        <span className="muted">
-          · copia 720p {cur.review.fps} fps, {num(cur.review.videoMbps)} Mbit/s
-        </span>
         <button className="btn" onClick={() => setOpen(!open)}>
           {open ? 'Chiudi' : 'Cambia'}
         </button>
@@ -82,33 +79,6 @@ export function ExportQuality({ seconds }: { seconds?: number }) {
             </label>
             <div className="small muted">
               ≈ {gbText(finalH)} all’ora{seconds ? ` · questo video ≈ ${gbText((finalH / 3600) * seconds)}` : ''}. YouTube consiglia 53–68 Mbit/s per il 4K a 60 fps in H.264; l’HEVC ne chiede meno a parità di qualità.
-            </div>
-          </fieldset>
-          <fieldset>
-            <legend>Copia a 720p per rivedere (H.264)</legend>
-            <label>
-              Video, Mbit/s
-              <input type="number" min={0.5} max={20} step={0.5} value={s.review.videoMbps} onChange={(e) => set('review', { videoMbps: Number(e.target.value) })} />
-            </label>
-            <div className="seg">
-              {([30, 60] as const).map((v) => (
-                <button key={v} aria-pressed={s.review.fps === v} onClick={() => set('review', { fps: v })}>
-                  {v} fps
-                </button>
-              ))}
-            </div>
-            <label>
-              Audio, kbit/s
-              <select value={s.review.audioKbps} onChange={(e) => set('review', { audioKbps: Number(e.target.value) })}>
-                {[96, 128, 160, 192].map((v) => (
-                  <option key={v} value={v}>
-                    {v}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className="small muted">
-              ≈ {gbText(reviewH)} all’ora{seconds ? ` · questo video ≈ ${gbText((reviewH / 3600) * seconds)}` : ''}. Resta quando cancelli registrazione e 4K.
             </div>
           </fieldset>
           <div className="row" style={{ gridColumn: '1 / -1' }}>

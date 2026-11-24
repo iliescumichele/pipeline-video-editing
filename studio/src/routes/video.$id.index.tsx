@@ -12,7 +12,7 @@ import { q } from '../lib/queries';
 import { useStartJob } from '../lib/jobs';
 import { useToast } from '../lib/toast';
 import { gb, hms, parseHms, when } from '../lib/util';
-import { addReference, generateGameplayYoutube, removeReference, revealInFinder, saveGameplayCuts, saveGameplayMeta } from '../server/api.functions';
+import { addCatalogTrack, addReference, importMusicLink, saveMusic, generateGameplayYoutube, removeReference, revealInFinder, saveGameplayCuts, saveGameplayMeta } from '../server/api.functions';
 
 // Video → un gameplay → Video lungo: tagli, voce e gioco, titolo e miniatura, video finale 4K.
 export const Route = createFileRoute('/video/$id/')({
@@ -34,6 +34,7 @@ const REASON: Record<CutReason, { label: string; color: string }> = {
 };
 
 const newId = () => Math.random().toString(36).slice(2, 10);
+const SONG_COLOR = '#b48cff';
 
 function GameplayEditor() {
   const { id } = Route.useParams();
@@ -105,6 +106,21 @@ function GameplayEditor() {
   };
 
   const startCut = () => setPendingStart(t);
+  // tratti con canzoni protette sulla timeline
+  const songs: SongMark[] = data.music.map((m) => ({ start: m.start, end: m.end, label: m.song ? `${m.song.artist ? `${m.song.artist} – ` : ''}${m.song.title}` : 'canzone', chosen: !!m.choice }));
+  const markSong = async () => {
+    if (pendingStart === null) return;
+    const [a, b] = [Math.min(pendingStart, t), Math.max(pendingStart, t)];
+    if (b - a < 1) return show('Il tratto è troppo corto');
+    try {
+      await saveMusic({ data: { id, segments: [...data.music, { id: newId(), start: a, end: b, source: 'manuale', mode: 'auto' }] } });
+      setPendingStart(null);
+      show(`Canzone segnata: ${hms(a)} – ${hms(b)}. Scegli la musica nel riquadro Canzoni protette.`);
+      await qc.invalidateQueries({ queryKey: ['gameplay', id] });
+    } catch (e) {
+      show((e as Error).message);
+    }
+  };
   const endCut = () => {
     if (pendingStart === null) return;
     const [a, b] = [Math.min(pendingStart, t), Math.max(pendingStart, t)];
@@ -133,7 +149,7 @@ function GameplayEditor() {
     return () => removeEventListener('keydown', onKey);
   });
 
-  const job = async (step: 'analizza' | 'lingua' | 'anteprima' | 'esporta' | 'tracce', extra: { from?: number; duration?: number } = {}, msg = 'In coda: segui il lavoro qui sotto o in Stato') => {
+  const job = async (step: 'analizza' | 'lingua' | 'anteprima' | 'esporta' | 'tracce' | 'canzoni' | 'musica' | 'proposte', extra: { from?: number; duration?: number; segment?: string } = {}, msg = 'In coda: segui il lavoro qui sotto o in Stato') => {
     try {
       if (!(await startChecked({ kind: 'gameplay', step, video: data.video, ...extra }))) return;
       show(msg);
@@ -247,10 +263,12 @@ function GameplayEditor() {
             facecam={data.facecam}
             outro={data.outro && !data.outro.missing ? { url: data.outro.url, start: Math.max(0, finalDur - data.outro.duration), duration: data.outro.duration } : null}
             removed={removed}
+            lucianusCrop={data.lucianusCrop}
+            gameSegments={data.music.filter((m) => m.choice && m.preview).map((m) => ({ start: m.start, end: m.end, url: m.preview! }))}
           />
           {data.previewStale && <div className="small" style={{ marginTop: 6, color: 'var(--amber, #ffb547)' }}>Hai cambiato i volumi di “Voce e gioco”: il mix finale da ascoltare è ancora quello di prima, rifallo per sentirli.</div>}
-          <Timeline dur={dur} cuts={cuts} t={t} pendingStart={pendingStart} onSeek={(s) => seek(s)} />
-          <Zoom dur={dur} cuts={cuts} t={t} pendingStart={pendingStart} onSeek={(s) => seek(s)} />
+          <Timeline dur={dur} cuts={cuts} songs={songs} t={t} pendingStart={pendingStart} onSeek={(s) => seek(s)} />
+          <Zoom dur={dur} cuts={cuts} songs={songs} t={t} pendingStart={pendingStart} onSeek={(s) => seek(s)} />
           <div className="row" style={{ marginTop: 10 }}>
             <label className="row small" style={{ width: 'auto', gap: 6 }}>
               <input type="checkbox" checked={skip} onChange={(e) => setSkip(e.target.checked)} style={{ width: 'auto' }} />
@@ -267,6 +285,9 @@ function GameplayEditor() {
                 <span className="chip teal">inizio {hms(pendingStart)}</span>
                 <button className="btn primary" onClick={endCut}>
                   Fine taglio qui (O)
+                </button>
+                <button className="btn" onClick={markSong} title="Il tratto da inizio a qui ha una canzone protetta: poi scegli la musica libera nel riquadro Canzoni protette">
+                  ♪ Segna come canzone
                 </button>
                 <button className="btn" onClick={() => setPendingStart(null)}>
                   Annulla
@@ -306,43 +327,21 @@ function GameplayEditor() {
         </div>
       )}
 
+      {data.available && <MusicCard id={id} data={data} t={t} seek={seek} job={job} busy={busy} />}
+
       {data.edit && <YoutubeCard id={id} data={data} />}
 
       {(data.export || data.test || data.archive || data.shorts.total > 0) && (
         <div className="card">
           <h3 style={{ marginTop: 0 }}>Video pronti</h3>
-          {data.archive ? (
+          {data.archive && (
             <div className="row small" style={{ marginBottom: 8 }}>
               <span className="chip">copia 720p per rivedere</span>
               <a href={data.archive.url} target="_blank" rel="noreferrer">
                 apri
               </a>
-              <span className="muted">
-                {gb(data.archive.size)} · resta anche se cancelli registrazione e video finale
-              </span>
+              <span className="muted">{gb(data.archive.size)} · fatta da un export di prima: non si fa più</span>
             </div>
-          ) : (
-            data.export && (
-              <div className="row small" style={{ marginBottom: 8 }}>
-                <span className="muted">Questo video è stato esportato prima della copia a 720p: creala per poterlo rivedere anche dopo aver cancellato i file grandi.</span>
-                <span className="spacer" />
-                <button
-                  className="btn"
-                  disabled={busy('archivio')}
-                  onClick={async () => {
-                    try {
-                      if (!(await startChecked({ kind: 'gameplay-archive', id }))) return;
-                      show('Copia a 720p in coda (circa 25 minuti)');
-                      await qc.invalidateQueries({ queryKey: ['gameplay', id] });
-                    } catch (e) {
-                      show((e as Error).message);
-                    }
-                  }}
-                >
-                  Crea la copia a 720p (circa 3 GB)
-                </button>
-              </div>
-            )
           )}
           {data.export && !data.tracks && data.available && (
             <div className="row small" style={{ marginBottom: 8 }}>
@@ -402,7 +401,15 @@ function GameplayEditor() {
   );
 }
 
-function Bar({ cuts, from, to, t, pendingStart, onSeek, height }: { cuts: Cut[]; from: number; to: number; t: number; pendingStart: number | null; onSeek: (s: number) => void; height: number }) {
+/** Un tratto con una canzone protetta, sulla timeline: viola pieno se ha già la musica scelta, tratteggiato se no. */
+interface SongMark {
+  start: number;
+  end: number;
+  label: string;
+  chosen: boolean;
+}
+
+function Bar({ cuts, songs = [], from, to, t, pendingStart, onSeek, height }: { cuts: Cut[]; songs?: SongMark[]; from: number; to: number; t: number; pendingStart: number | null; onSeek: (s: number) => void; height: number }) {
   const span = to - from;
   const pct = (s: number) => `${((s - from) / span) * 100}%`;
   return (
@@ -418,7 +425,7 @@ function Bar({ cuts, from, to, t, pendingStart, onSeek, height }: { cuts: Cut[];
         .map((c) => (
           <div
             key={c.id}
-            title={`${REASON[c.reason].label}: ${hms(c.start)} – ${hms(c.end)}${c.enabled ? '' : ' (disattivato)'}`}
+            title={`${REASON[c.reason].label}: ${hms(c.start)} – ${hms(c.end)}${c.enabled ? '' : c.edited ? ' (disattivato)' : ' (proposta: attivala nella lista dei tagli per toglierla)'}`}
             style={{
               position: 'absolute',
               top: 0,
@@ -431,6 +438,24 @@ function Bar({ cuts, from, to, t, pendingStart, onSeek, height }: { cuts: Cut[];
             }}
           />
         ))}
+      {songs
+        .filter((m) => m.end > from && m.start < to)
+        .map((m) => (
+          <div
+            key={`${m.start}-${m.end}`}
+            title={`♪ ${m.label}: ${hms(m.start)} – ${hms(m.end)}${m.chosen ? '' : ' (musica da scegliere)'}`}
+            style={{
+              position: 'absolute',
+              top: 0,
+              height: '38%',
+              left: pct(Math.max(from, m.start)),
+              width: `max(3px, ${((Math.min(to, m.end) - Math.max(from, m.start)) / span) * 100}%)`,
+              background: m.chosen ? SONG_COLOR : 'transparent',
+              border: m.chosen ? 'none' : `1px dashed ${SONG_COLOR}`,
+              borderRadius: 3,
+            }}
+          />
+        ))}
       {pendingStart !== null && pendingStart >= from && pendingStart <= to && (
         <div style={{ position: 'absolute', top: 0, bottom: 0, left: pct(Math.min(pendingStart, t)), width: pct(from + Math.abs(t - pendingStart)), background: 'rgba(63,208,201,0.35)' }} />
       )}
@@ -439,10 +464,10 @@ function Bar({ cuts, from, to, t, pendingStart, onSeek, height }: { cuts: Cut[];
   );
 }
 
-function Timeline({ dur, cuts, t, pendingStart, onSeek }: { dur: number; cuts: Cut[]; t: number; pendingStart: number | null; onSeek: (s: number) => void }) {
+function Timeline({ dur, cuts, songs, t, pendingStart, onSeek }: { dur: number; cuts: Cut[]; songs: SongMark[]; t: number; pendingStart: number | null; onSeek: (s: number) => void }) {
   return (
     <>
-      <Bar cuts={cuts} from={0} to={dur} t={t} pendingStart={pendingStart} onSeek={onSeek} height={30} />
+      <Bar cuts={cuts} songs={songs} from={0} to={dur} t={t} pendingStart={pendingStart} onSeek={onSeek} height={30} />
       <div className="row small muted" style={{ justifyContent: 'space-between' }}>
         <span>0:00</span>
         <span>
@@ -454,6 +479,12 @@ function Timeline({ dur, cuts, t, pendingStart, onSeek }: { dur: number; cuts: C
                 {REASON[r].label}
               </span>
             ))}
+          {songs.length > 0 && (
+            <span style={{ marginLeft: 10 }}>
+              <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 3, background: SONG_COLOR, marginRight: 4 }} />
+              canzoni protette
+            </span>
+          )}
         </span>
         <span>{hms(dur)}</span>
       </div>
@@ -462,12 +493,12 @@ function Timeline({ dur, cuts, t, pendingStart, onSeek }: { dur: number; cuts: C
 }
 
 /** Ingrandimento: due minuti intorno al punto in cui sei, per tagli precisi. */
-function Zoom({ dur, cuts, t, pendingStart, onSeek }: { dur: number; cuts: Cut[]; t: number; pendingStart: number | null; onSeek: (s: number) => void }) {
+function Zoom({ dur, cuts, songs, t, pendingStart, onSeek }: { dur: number; cuts: Cut[]; songs: SongMark[]; t: number; pendingStart: number | null; onSeek: (s: number) => void }) {
   const from = Math.max(0, Math.min(dur - 120, t - 60));
   const to = Math.min(dur, from + 120);
   return (
     <>
-      <Bar cuts={cuts} from={from} to={to} t={t} pendingStart={pendingStart} onSeek={onSeek} height={22} />
+      <Bar cuts={cuts} songs={songs} from={from} to={to} t={t} pendingStart={pendingStart} onSeek={onSeek} height={22} />
       <div className="row small muted" style={{ justifyContent: 'space-between' }}>
         <span>{hms(from)}</span>
         <span>ingrandimento: 2 minuti</span>
@@ -503,6 +534,7 @@ function CutRow({ c, t, canSeek, onGo, onChange, onDelete }: { c: Cut; t: number
       <span className="chip" style={{ borderColor: r.color, color: r.color, minWidth: 64, textAlign: 'center' }}>
         {r.label}
       </span>
+      {!c.enabled && !c.edited && <span className="chip amber" title="Trovato dall'analisi: si toglie solo se lo attivi">proposta</span>}
       <TimeInput value={c.start} onChange={(s) => onChange({ start: s })} />
       <span className="muted">→</span>
       <TimeInput value={c.end} onChange={(s) => onChange({ end: s })} />
@@ -906,6 +938,246 @@ function ReviewCard({ data }: { data: GameplayData }) {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+type MusicRow = GameplayData['music'][number];
+const MODE_LABEL = { auto: 'automatico', sostituisci: 'sostituisci la canzone', aggiungi: 'aggiungi (canzone già spenta)' } as const;
+
+/**
+ * Canzoni protette: i tratti (trovati da Shazam o segnati a mano con I e "♪ Segna come canzone"), la musica libera
+ * scelta per ciascuno, e "Applica" che ricostruisce il gioco con dialoghi ed effetti originali (docs/musica.md).
+ */
+function MusicCard({
+  id,
+  data,
+  t,
+  seek,
+  job,
+  busy,
+}: {
+  id: string;
+  data: GameplayData;
+  t: number;
+  seek: (s: number, play?: boolean) => void;
+  job: (step: 'canzoni' | 'musica' | 'proposte', extra?: { segment?: string }, msg?: string) => Promise<void>;
+  busy: (step: string) => boolean;
+}) {
+  const qc = useQueryClient();
+  const show = useToast();
+  const [rows, setRows] = useState<MusicRow[]>(data.music);
+  const [link, setLink] = useState('');
+  const [importing, setImporting] = useState(false);
+  const stamp = JSON.stringify(data.music);
+  useEffect(() => setRows(data.music), [stamp]); // eslint-disable-line react-hooks/exhaustive-deps
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const save = (next: MusicRow[]) => {
+    setRows(next);
+    clearTimeout(timer.current);
+    timer.current = setTimeout(async () => {
+      try {
+        await saveMusic({ data: { id, segments: next } });
+        await qc.invalidateQueries({ queryKey: ['gameplay', id] });
+      } catch (e) {
+        show((e as Error).message);
+      }
+    }, 400);
+  };
+  const patch = (rid: string, p: Partial<MusicRow>) => save(rows.map((r) => (r.id === rid ? { ...r, ...p } : r)));
+  const choose = (rid: string, file: string) => {
+    const tr = data.library.find((x) => x.file === file);
+    patch(rid, { choice: tr ? { file: tr.file, title: tr.title, artist: tr.artist, origin: tr.origin, url: tr.url, license: tr.license, attribution: tr.attribution } : undefined });
+  };
+  const doImport = async () => {
+    setImporting(true);
+    try {
+      const tr = await importMusicLink({ data: link });
+      setLink('');
+      show(tr.warning ?? `Aggiunta alla libreria: ${tr.artist} – ${tr.title}`);
+      await qc.invalidateQueries({ queryKey: ['gameplay', id] });
+    } catch (e) {
+      show((e as Error).message);
+    } finally {
+      setImporting(false);
+    }
+  };
+  const pending = rows.some((r) => r.choice) && !data.musicReady;
+  const useCatalog = async (rid: string, piece: { title: string; url: string }) => {
+    try {
+      const tr = await addCatalogTrack({ data: piece });
+      await qc.invalidateQueries({ queryKey: ['gameplay', id] });
+      patch(rid, { choice: { file: tr.file, title: tr.title, artist: tr.artist, origin: tr.origin, url: tr.url, license: tr.license, attribution: tr.attribution } });
+      show(`Scelta: ${tr.artist} – ${tr.title} (aggiunta alla libreria)`);
+    } catch (e) {
+      show((e as Error).message);
+    }
+  };
+
+  return (
+    <div className="card">
+      <div className="row">
+        <h3 style={{ margin: 0 }}>Canzoni protette</h3>
+        {rows.length > 0 && (data.musicReady ? <span className="chip ok">musica applicata</span> : <span className="chip amber">da applicare</span>)}
+        <span className="spacer" />
+        <button className="btn" disabled={busy('canzoni') || !data.analyzed} onClick={() => job('canzoni', {}, 'Ricerca delle canzoni in coda: il risultato compare qui e sulla timeline')} title="Shazam ascolta la traccia del gioco (solo i tratti non tagliati)">
+          Cerca le canzoni
+        </button>
+        <button className={`btn ${pending ? 'primary' : ''}`} disabled={busy('musica') || !rows.length} onClick={() => job('musica', {}, 'Musica in coda: separo dialoghi ed effetti e metto la musica nuova (circa 1 minuto per tratto)')}>
+          Applica la musica
+        </button>
+      </div>
+      <div className="small muted" style={{ margin: '6px 0 10px' }}>
+        Segna un tratto con I e poi “♪ Segna come canzone”, oppure “Cerca le canzoni”. Per ogni tratto scegli una musica libera: dopo “Applica” la senti nel player, con dialoghi ed effetti del gioco originali. Fuori dai tratti il gioco resta identico.
+      </div>
+      {data.musicDetect && (
+        <div className={`small ${data.musicDetect.status === 'ok' ? 'muted' : ''}`} style={{ marginBottom: 8, color: data.musicDetect.status === 'ok' ? undefined : 'var(--amber)' }}>
+          Ultima ricerca {when(data.musicDetect.at)}: {data.musicDetect.found} canzoni trovate con {data.musicDetect.requests} richieste a Shazam
+          {data.musicDetect.status === 'bloccato' && ' · Shazam ha smesso di rispondere: risultati parziali, riprova più tardi o segna i tratti a mano'}
+          {data.musicDetect.status === 'con errori' && ` · ${data.musicDetect.errors.length} richieste non riuscite`}
+          . Le canzoni trovate sono proposte: Shazam può sbagliare, ascolta prima di scegliere.
+        </div>
+      )}
+      {rows.length === 0 && <div className="empty">Nessuna canzone segnata.</div>}
+      <div className="grid" style={{ gap: 10 }}>
+        {rows.map((r) => {
+          const tr = data.library.find((x) => x.file === r.choice?.file);
+          return (
+            <div key={r.id} className="music-row">
+              <div className="row" style={{ gap: 8 }}>
+                <span className="chip" style={{ borderColor: SONG_COLOR, color: SONG_COLOR }}>
+                  ♪ {r.source === 'rilevata' ? 'trovata' : 'a mano'}
+                </span>
+                <TimeInput value={r.start} onChange={(s) => patch(r.id, { start: s })} />
+                <span className="muted">→</span>
+                <TimeInput value={r.end} onChange={(s) => patch(r.id, { end: s })} />
+                <span className="small muted">{Math.round(r.end - r.start)} s</span>
+                <input
+                  value={r.song?.title ?? ''}
+                  placeholder="canzone originale (facoltativo)"
+                  onChange={(e) => patch(r.id, { song: e.target.value ? { ...r.song, title: e.target.value } : undefined })}
+                  style={{ flex: '1 1 180px', minWidth: 0 }}
+                />
+                <button className="btn" onClick={() => seek(Math.max(0, r.start - 3), true)}>
+                  ▶ Ascolta qui
+                </button>
+                <button className="btn" onClick={() => patch(r.id, { start: t })}>
+                  Inizio = {hms(t)}
+                </button>
+                <button className="btn" onClick={() => patch(r.id, { end: t })}>
+                  Fine = {hms(t)}
+                </button>
+                <button className="btn danger" onClick={() => save(rows.filter((x) => x.id !== r.id))} title="Togli il tratto">
+                  ✕
+                </button>
+              </div>
+              <div className="row" style={{ gap: 8, marginTop: 6 }}>
+                <label className="row small" style={{ width: 'auto', gap: 6 }}>
+                  Musica libera
+                  <select value={r.choice?.file ?? ''} onChange={(e) => choose(r.id, e.target.value)} style={{ width: 'auto', maxWidth: 320 }}>
+                    <option value="">— scegli —</option>
+                    {data.library.map((x) => (
+                      <option key={x.file} value={x.file}>
+                        {x.artist} – {x.title}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {tr?.listen && <audio src={tr.listen} controls preload="none" style={{ height: 32 }} />}
+                <label className="row small" style={{ width: 'auto', gap: 6 }}>
+                  Modo
+                  <select value={r.mode ?? 'auto'} onChange={(e) => patch(r.id, { mode: e.target.value as MusicRow['mode'] })} style={{ width: 'auto' }}>
+                    {(Object.keys(MODE_LABEL) as (keyof typeof MODE_LABEL)[]).map((m) => (
+                      <option key={m} value={m}>
+                        {MODE_LABEL[m]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {r.mode !== 'sostituisci' && (
+                  <label className="row small" style={{ width: 'auto', gap: 6 }} title="Vale quando la canzone originale non si sente e la musica nuova si aggiunge: rispetto al livello del gioco nel tratto">
+                    Volume se aggiunta
+                    <input type="range" min={-12} max={12} step={1} value={r.addLevelDb ?? 0} onChange={(e) => patch(r.id, { addLevelDb: Number(e.target.value) })} style={{ width: 120 }} />
+                    <b style={{ width: 48 }}>
+                      {(r.addLevelDb ?? 0) > 0 ? '+' : ''}
+                      {r.addLevelDb ?? 0} dB
+                    </b>
+                  </label>
+                )}
+              </div>
+              <div className="row" style={{ gap: 8, marginTop: 6 }}>
+                <input
+                  value={r.style ?? ''}
+                  placeholder="stile cercato, per le proposte se la canzone non si sente (es. soft rock anni 70, romantico)"
+                  onChange={(e) => patch(r.id, { style: e.target.value || undefined })}
+                  style={{ flex: '1 1 280px', minWidth: 0 }}
+                />
+                <button className="btn" disabled={busy('proposte')} onClick={() => job('proposte', { segment: r.id }, 'Cerco musica simile (circa un minuto): le proposte compaiono qui sotto')}>
+                  {r.proposals ? 'Rifai le proposte' : 'Proposte'}
+                </button>
+              </div>
+              {r.proposals && <ProposalList p={r.proposals} chosen={r.choice?.file} onLibrary={(file) => choose(r.id, file)} onCatalog={(piece) => (piece.inLibrary ? choose(r.id, piece.inLibrary) : useCatalog(r.id, piece))} />}
+              {r.choice?.license && (
+                <div className="small muted" style={{ marginTop: 4 }}>
+                  Licenza: {r.choice.license}
+                  {r.choice.attribution ? ` · da mettere nella descrizione: ${r.choice.attribution.split('\n')[0]}` : ''}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      <div className="row" style={{ marginTop: 12, gap: 8 }}>
+        <input placeholder="Aggiungi alla libreria da un link YouTube (per esempio della YouTube Audio Library)" value={link} onChange={(e) => setLink(e.target.value)} style={{ flex: '1 1 320px' }} />
+        <button className="btn" disabled={!link || importing} onClick={doImport}>
+          {importing ? 'Scarico…' : 'Aggiungi'}
+        </button>
+        {data.musicReport && (
+          <a className="small" href={data.musicReport} target="_blank" rel="noreferrer">
+            report (attribuzioni)
+          </a>
+        )}
+      </div>
+    </div>
+  );
+}
+
+type ProposalView = NonNullable<MusicRow['proposals']>;
+
+/** Le proposte di un tratto: dalla libreria e dal catalogo di Kevin MacLeod, da ascoltare e scegliere. */
+function ProposalList({ p, chosen, onLibrary, onCatalog }: { p: ProposalView; chosen?: string; onLibrary: (file: string) => void; onCatalog: (piece: ProposalView['catalog'][number]) => void }) {
+  const score = (x: number) => `${Math.round(x * 100)}%`;
+  return (
+    <div className="proposals">
+      <div className="small muted">
+        Proposte {p.source ? `in base a: ${p.source}` : ''}
+        {p.bpm ? ` · ${Math.round(p.bpm)} BPM` : ''}
+        {p.note ? ` · ${p.note}` : ''}
+      </div>
+      {p.library.length > 0 && <div className="small" style={{ marginTop: 6 }}>Dalla tua libreria</div>}
+      {p.library.map((x) => (
+        <div key={x.file} className="row small" style={{ gap: 8 }}>
+          <span style={{ flex: '1 1 200px', minWidth: 0 }}>
+            <b>{x.title}</b> · {x.artist} · {Math.round(x.bpm)} BPM · somiglianza {score(x.score)}
+          </span>
+          {x.listen && <audio src={x.listen} controls preload="none" style={{ height: 28 }} />}
+          <button className="btn" disabled={chosen === x.file} onClick={() => onLibrary(x.file)}>
+            {chosen === x.file ? 'Scelta' : 'Usa'}
+          </button>
+        </div>
+      ))}
+      {p.catalog.length > 0 && <div className="small" style={{ marginTop: 6 }}>Dal catalogo di Kevin MacLeod (gratis, CC BY 4.0: va citato nella descrizione)</div>}
+      {p.catalog.map((x) => (
+        <div key={x.url} className="row small" style={{ gap: 8 }}>
+          <span style={{ flex: '1 1 200px', minWidth: 0 }} title={x.description}>
+            <b>{x.title}</b> · {Math.round(x.bpm)} BPM · {x.length?.replace(/^00:/, '')} · {x.feel} · somiglianza {score(x.score)}
+          </span>
+          <audio src={x.url} controls preload="none" style={{ height: 28 }} />
+          <button className="btn" disabled={!!x.inLibrary && chosen === x.inLibrary} onClick={() => onCatalog(x)}>
+            {x.inLibrary && chosen === x.inLibrary ? 'Scelta' : 'Usa'}
+          </button>
+        </div>
+      ))}
     </div>
   );
 }

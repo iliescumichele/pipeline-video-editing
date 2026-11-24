@@ -154,3 +154,17 @@ export const getExportSettings = createServerFn().handler(() => p.exportSettings
 export const saveExportSettings = createServerFn({ method: 'POST' })
   .validator((s: Parameters<typeof p.saveExportSettings>[0]) => s)
   .handler(({ data }) => p.saveExportSettings(data));
+
+// ───────── canzoni protette ─────────
+
+export const saveMusic = createServerFn({ method: 'POST' })
+  .validator((d: { id: string; segments: Parameters<typeof p.saveMusic>[1] }) => d)
+  .handler(({ data }) => p.saveMusic(data.id, data.segments));
+
+export const importMusicLink = createServerFn({ method: 'POST' })
+  .validator((link: string) => link)
+  .handler(({ data }) => p.importMusicLink(data));
+
+export const addCatalogTrack = createServerFn({ method: 'POST' })
+  .validator((d: { title: string; url: string }) => d)
+  .handler(({ data }) => p.addCatalogTrack(data));

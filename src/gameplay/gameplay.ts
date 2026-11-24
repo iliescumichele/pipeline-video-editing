@@ -3,9 +3,12 @@
 //   bun src/gameplay/gameplay.ts analizza  <video>              menu e impostazioni da tagliare, sincronia con Lucianus
 //   bun src/gameplay/gameplay.ts lingua    <video> [--taglia ro] parti in un'altra lingua (Whisper small, in locale)
 //   bun src/gameplay/gameplay.ts anteprima <video>              audio mixato per la revisione (il video è la registrazione stessa)
-//   bun src/gameplay/gameplay.ts esporta   <video> [--da s --durata s]  video finale 4K con i tagli attivi (e la copia a 720p)
+//   bun src/gameplay/gameplay.ts esporta   <video> [--da s --durata s] [--altezza 480]  video finale 4K con i tagli attivi
 //   bun src/gameplay/gameplay.ts tracce    <video>              gioco e voce separati per gli short, da un video finale già esportato
 //   bun src/gameplay/gameplay.ts archivio  <id>                 copia a 720p da un video finale già esportato
+//   bun src/gameplay/gameplay.ts canzoni   <video>              trova le canzoni protette nella traccia del gioco (Shazam)
+//   bun src/gameplay/gameplay.ts proposte  <video> [--tratto id] musica libera simile per i tratti senza musica scelta
+//   bun src/gameplay/gameplay.ts musica    <video>              gioco senza canzoni con la musica libera scelta (docs/musica.md)
 //
 // I tagli si rivedono nella dashboard (pagina Gameplay) e stanno in data/gameplay/<id>/edit.json.
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
@@ -13,6 +16,9 @@ import { basename, dirname, extname, join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 import { db, now } from '../dashboard/db';
 import { readExport } from '../lib/export-settings';
+import { cropFilter, cropScale, type LucianusCrop } from '../lib/lucianus-crop';
+import { readMusicConfig } from '../lib/music-config';
+import { detectSongs, proposeMusic, rebuildGame } from './music';
 import { obsVoiceFile } from '../lib/obs-voice';
 import { voiceGraph, voiceProfile } from '../lib/voice-eq';
 import { checkSpace } from '../lib/space';
@@ -21,14 +27,16 @@ import { PATHS, readModels, ROOT } from '../lib/env';
 import { py } from '../lib/py';
 import { videoId } from '../lib/video-id';
 import {
-  archivePath, newEdit, type AudioMix, type Duck, editPath, exportPath, finalDuration, type GameplayEdit, gameplayDir, gameplaySpace, languagePath, LOOK, lookOf, lucianusFor, mixKey, mixOf, mixPath, oldPreviewPath, outroPieces,
+  archivePath, cleanGamePath, detectLucianusBars, lookForCrop, newEdit, type AudioMix, type Duck, editPath, exportPath, finalDuration, type GameplayEdit, gameplayDir, gameplaySpace, languagePath, LOOK, lookOf, lucianusFor, mixKey, mixOf, mixPath, oldPreviewPath, outroPieces,
   outroStart, posterPath, previewPath, readEdit, removedRanges, replaceAuto, showsFacecam, tracksPath, writeEdit,
 } from './edit';
 
 const { values, positionals } = parseArgs({
   args: Bun.argv.slice(2),
   allowPositionals: true,
-  options: { taglia: { type: 'string', default: 'ro' }, da: { type: 'string' }, durata: { type: 'string' } },
+  // --altezza: un video veloce da guardare (per esempio 480), accanto al finale, senza tracce per gli short
+  // --solo-audio: rifà solo l'audio del video finale già esportato (per esempio dopo aver cambiato una musica)
+  options: { taglia: { type: 'string', default: 'ro' }, da: { type: 'string' }, durata: { type: 'string' }, altezza: { type: 'string' }, 'solo-audio': { type: 'boolean' }, tratto: { type: 'string' } },
 });
 const [command, input] = positionals;
 if (!command || !input) {
@@ -74,11 +82,26 @@ async function runProgress(args: string[], total: number): Promise<string> {
       const speed = Number.parseFloat(kv.speed ?? '') || pos / ((performance.now() - t0) / 1000) || 0;
       const eta = speed > 0 && frac > 0 ? (total - pos) / speed : NaN;
       const size = Number(kv.total_size) || 0;
-      const bar = '█'.repeat(Math.round(frac * 20)).padEnd(20, '░');
+      // barra più corta nei pane stretti, così resta posto per la stima di fine
+      const width = process.stdout.isTTY && process.stdout.columns < 80 ? 10 : 20;
+      const bar = '█'.repeat(Math.round(frac * width)).padEnd(width, '░');
       const parts = [`${bar} ${String(Math.floor(frac * 100)).padStart(3)}%`, `${hms(pos)} / ${hms(total)}`, `${speed.toFixed(1).replace('.', ',')}×`];
       if (Number.isFinite(eta)) parts.push(eta < 60 ? 'fine tra meno di 1 min' : `fine tra ~${eta >= 3600 ? `${Math.floor(eta / 3600)} h ${Math.round((eta % 3600) / 60)} min` : `${Math.round(eta / 60)} min`}`);
       if (size > 0) parts.push(`${(size / 1e9).toFixed(1).replace('.', ',')} GB`);
-      process.stdout.write(`\r${parts.join('  ·  ')}   `);
+      // In un terminale la riga non deve andare a capo: \r torna solo all'inizio dell'ultimo pezzo e ogni
+      // aggiornamento lascerebbe una riga nuova. Se il pane è stretto si tolgono GB, velocità, tempi e stima di
+      // fine, in quest'ordine; prima di riscrivere si cancella la riga. Nei log della dashboard (niente terminale)
+      // resta la riga intera, di cui la dashboard tiene l'ultimo stato.
+      const cols = process.stdout.isTTY ? process.stdout.columns : 0;
+      if (cols) {
+        const keep = [...parts];
+        for (const drop of [`GB`, `×`, ` / `, `fine tra`]) {
+          if (keep.join('  ·  ').length < cols) break;
+          const i = keep.findIndex((p, k) => k > 0 && p.includes(drop));
+          if (i > 0) keep.splice(i, 1);
+        }
+        process.stdout.write(`\r\x1b[2K${keep.join('  ·  ').slice(0, cols - 1)}`);
+      } else process.stdout.write(`\r${parts.join('  ·  ')}   `);
     }
   }
   process.stdout.write('\n');
@@ -283,13 +306,13 @@ const DUCK_RATIO: Record<Duck, number> = { spento: 1, leggero: 2, medio: 3, fort
  * misurato, esce sempre allo stesso) e si alza di voiceDb; il gioco si abbassa mentre parli. −8 dB di margine:
  * il FLAC è a interi e la somma delle due tracce supera lo 0; il volume giusto lo dà gainTo14.
  */
-function mixGraph(mix: AudioMix, voiceIn: number, src: VoiceSource): string {
+function mixGraph(mix: AudioMix, voiceIn: number, src: VoiceSource, game: string): string {
   const voice = `${src.graph}${voiceGraph(src.label, 'voce', voiceIn, mix.clear, src.channels, mix.eq)};[voce]${src.channels === 1 ? 'pan=stereo|c0=c0|c1=c0,' : ''}volume=${mix.voiceDb}dB`;
   // alcuni tipi di voce hanno anche un compressore sul mix intero: tiene giù le botte del gioco
   const bus = voiceProfile(mix.eq).bus;
   const sum = `amix=inputs=2:normalize=0:duration=first,${bus ? `${bus},` : ''}volume=-8dB[a]`;
-  if (mix.duck === 'spento') return `${voice}[v];[0:a:0][v]${sum}`;
-  return `${voice},asplit=2[v][sc];[0:a:0][sc]sidechaincompress=threshold=0.05:ratio=${DUCK_RATIO[mix.duck]}:attack=15:release=350:knee=4[g];[g][v]${sum}`;
+  if (mix.duck === 'spento') return `${voice}[v];${game}[v]${sum}`;
+  return `${voice},asplit=2[v][sc];${game}[sc]sidechaincompress=threshold=0.05:ratio=${DUCK_RATIO[mix.duck]}:attack=15:release=350:knee=4[g];[g][v]${sum}`;
 }
 
 /**
@@ -387,12 +410,20 @@ function voiceSource(e: GameplayEdit, vi: VoiceInputs, voiceIn: number): VoiceSo
   return { graph: `${parts.join(';')};`, label: '[vsrc]', channels: vi.channels };
 }
 
+/** Gioco: la traccia 1 della registrazione, o il gioco senza canzoni se c'è (ingresso 1 di ffmpeg). */
+function gameInput(): { args: string[]; label: string; next: number } {
+  const clean = cleanGamePath(id);
+  if (!readMusicConfig().enabled || !existsSync(clean)) return { args: [], label: '[0:a:0]', next: 1 };
+  console.log(`  gioco senza canzoni protette: ${basename(clean)}`);
+  return { args: ['-i', clean], label: '[1:a:0]', next: 2 };
+}
+
 /** Mix di tutta la registrazione in mix.flac; si rifà solo se cambiano registrazione o volumi. */
 async function ensureMix(e: GameplayEdit): Promise<string> {
   const out = mixPath(id);
   const keyPath = `${out}.json`;
   const mix = mixOf(e);
-  const key = mixKey(e);
+  const key = mixKey(e, id);
   if (existsSync(out) && existsSync(keyPath) && readFileSync(keyPath, 'utf8') === key) {
     console.log('Mix di voce e gioco già pronto.');
     return out;
@@ -401,12 +432,13 @@ async function ensureMix(e: GameplayEdit): Promise<string> {
   const tmp = `${out}.part.flac`;
   // la cartella di lavoro può non esserci ancora: anteprima e rumeno non sono più obbligatori prima dell'export
   mkdirSync(dirname(out), { recursive: true });
-  const vi = await voiceInputs(e, 1);
+  const g = gameInput();
+  const vi = await voiceInputs(e, g.next);
   const voiceIn = inputLufs(e, vi);
   console.log(`  voce ${vi.obsPath ? 'con i filtri di OBS' : 'grezza'} a ${voiceIn.toFixed(1)} LUFS`);
   const src = voiceSource(e, vi, voiceIn);
   await runProgress(
-    ['-hide_banner', '-y', '-loglevel', 'error', '-i', video, ...vi.args, '-filter_complex', mixGraph(mix, voiceIn, src), '-map', '[a]', '-c:a', 'flac', '-sample_fmt', 's32', '-bits_per_raw_sample', '24', tmp],
+    ['-hide_banner', '-y', '-loglevel', 'error', '-i', video, ...g.args, ...vi.args, '-filter_complex', mixGraph(mix, voiceIn, src, g.label), '-map', '[a]', '-c:a', 'flac', '-sample_fmt', 's32', '-bits_per_raw_sample', '24', tmp],
     e.duration,
   );
   renameSync(tmp, out);
@@ -481,19 +513,23 @@ function videoGraph(e: GameplayEdit, outHeight: number, removed: [number, number
   const keep = keepExpr(removed);
   const look = lookOf(e);
   const lucH = Math.max(2, Math.round((look.h * outHeight) / 2) * 2);
-  const key = (i: number, out: string) =>
-    `[${i}:v]crop=${LOOK.crop},scale=in_color_matrix=bt709:in_range=tv,format=rgba,${LOOK.key},scale=-2:${lucH}:flags=lanczos:out_color_matrix=bt709:out_range=tv,format=yuva444p[${out}]`;
+  // il Lucianus della registrazione con il suo ritaglio (bande nere); il pezzo finale con quello di base
+  const key = (i: number, out: string, crop?: LucianusCrop, height = lucH) =>
+    `[${i}:v]${cropFilter(crop)},scale=in_color_matrix=bt709:in_range=tv,format=rgba,${LOOK.key},scale=-2:${height}:flags=lanczos:out_color_matrix=bt709:out_range=tv,format=yuva444p[${out}]`;
   const place = `x=trunc(W*${look.x.toFixed(5)}):y=trunc(H*${look.y.toFixed(5)}):eof_action=pass`;
   const parts = [outHeight === 2160 ? '[0:v]null[g]' : `[0:v]scale=-2:${outHeight}[g]`];
   let cur = '[g]';
   if (io.luc !== null) {
-    parts.push(key(io.luc, 'l'), `${cur}[l]overlay=${place}[gl]`);
+    parts.push(key(io.luc, 'l', e.lucianusCrop), `${cur}[l]overlay=${place}[gl]`);
     cur = '[gl]';
   }
   parts.push(`${cur}${keep ? `select='${keep}',setpts=N/FRAME_RATE/TB` : 'null'}[c]`);
   cur = '[c]';
   if (io.outro !== null) {
-    parts.push(key(io.outro, 'o'), `${cur}[o]overlay=${place}[co]`);
+    // il pezzo finale ha il ritaglio di base: stessa scala dei personaggi, sullo stesso margine basso
+    const outH = Math.max(2, Math.round((look.h / cropScale(e.lucianusCrop) * outHeight) / 2) * 2);
+    const outPlace = `x=trunc(W*${look.x.toFixed(5)}):y=trunc(H*${(look.y + look.h).toFixed(5)})-${outH}:eof_action=pass`;
+    parts.push(key(io.outro, 'o', undefined, outH), `${cur}[o]overlay=${cropScale(e.lucianusCrop) === 1 ? place : outPlace}[co]`);
     cur = '[co]';
   }
   parts.push(`${cur}format=yuv420p[v]`);
@@ -533,11 +569,20 @@ const hasEncoder = (name: string) => Bun.spawnSync([FFMPEG, '-hide_banner', '-en
 async function analizza() {
   let e = await load();
   if (e.lucianus && e.offsetMs === null) e = writeEdit(id, { ...e, offsetMs: measureOffset(e) });
+  // bande nere nel file di Lucianus: si tolgono, e Lucianus scende sul margine basso (se non è stato spostato a mano)
+  if (e.lucianus && !e.lucianusCrop) {
+    const crop = detectLucianusBars(e.lucianus, e.duration);
+    if (crop) {
+      e = writeEdit(id, { ...e, lucianusCrop: crop, ...(e.look ? {} : { look: lookForCrop(crop) }) });
+      console.log(`Lucianus ha bande nere: tolte (sopra ${Math.round(crop.top * 100)}%, sotto ${Math.round(crop.bottom * 100)}%)${e.look ? '' : ', appoggiato in basso'}.`);
+    }
+  }
   const menus = await findMenus();
-  e = writeEdit(id, { ...replaceAuto(e, 'menu', menus), analyzed_at: new Date().toISOString() });
-  console.log(`Impostazioni trovate: ${menus.length}`);
+  // i menu diventano proposte spente: si vedono sulla timeline e decidi tu se toglierli
+  e = writeEdit(id, { ...replaceAuto(e, 'menu', menus, false), analyzed_at: new Date().toISOString() });
+  console.log(`Menu trovati: ${menus.length} (proposte, non ancora tagliate)`);
   for (const m of menus) console.log(`  ${hms(m.start)} – ${hms(m.end)}`);
-  console.log(`Tagli in totale: ${e.cuts.length}. Rivedili nella dashboard, pagina Gameplay.`);
+  console.log(`Rivedili nella dashboard (Video → Video lungo) e attiva quelli da togliere.`);
 }
 
 async function lingua() {
@@ -571,6 +616,7 @@ async function anteprima() {
 async function esporta() {
   let e = await load();
   if (e.lucianus && e.offsetMs === null) e = writeEdit(id, { ...e, offsetMs: measureOffset(e) });
+  if (values['solo-audio']) return soloAudio(e);
   const from = values.da ? Number(values.da) : undefined;
   const dur = values.durata ? Number(values.durata) : undefined;
   const test = from !== undefined || dur !== undefined;
@@ -580,14 +626,21 @@ async function esporta() {
     .map(([a, b]): [number, number] => [a - (from ?? 0), b - (from ?? 0)])
     .filter(([a, b]) => b > 0 && (dur === undefined || a < dur))
     .map(([a, b]): [number, number] => [Math.max(0, a), b]);
-  const encoder = process.env.GAMEPLAY_ENCODER ?? 'hevc_videotoolbox';
+  // video veloce da guardare (--altezza 480): H.264 leggero, niente tracce o pulizie a fine lavoro
+  const height = values.altezza ? Math.max(144, Math.min(2160, Math.round(Number(values.altezza) / 2) * 2)) : 2160;
+  const quick = height < 2160;
+  const quickMbps = Math.round(10 * (height / 1080) ** 1.5 * 10) / 10;
+  const encoder = quick ? (hasEncoder('h264_videotoolbox') ? 'h264_videotoolbox' : 'libx264') : (process.env.GAMEPLAY_ENCODER ?? 'hevc_videotoolbox');
   const q = readExport();
-  console.log(`Qualità: video finale ${q.final.videoMbps} Mbit/s, audio ${q.final.audioKbps}k${test ? '' : ` · copia a 720p ${q.review.fps} fps, ${q.review.videoMbps} Mbit/s`} (config/export.json)`);
+  if (quick) console.log(`Video veloce da guardare: ${height}p, H.264 ${quickMbps} Mbit/s, audio ${q.final.audioKbps}k (lo stesso del finale).`);
+  else console.log(`Qualità: video finale ${q.final.videoMbps} Mbit/s, audio ${q.final.audioKbps}k (config/export.json)`);
   if (!hasEncoder(encoder)) throw new Error(`questo ffmpeg non ha l'encoder ${encoder}: installalo con brew install ffmpeg`);
   console.log(`Tagli attivi: ${removed.length} (${Math.round(removed.reduce((t, [a, b]) => t + b - a, 0))} s in meno).`);
-  checkSpace(gameplaySpace('esporta', id, e, test ? { duration: dur ?? 30 } : undefined), test ? 'la prova' : 'il video finale');
+  const quickSpace = quick ? { label: `video a ${height}p`, bytesPerSecond: (quickMbps * 1e6 + q.final.audioKbps * 1e3) / 8 } : undefined;
+  checkSpace(gameplaySpace('esporta', id, e, test ? { duration: dur ?? 30 } : undefined, quickSpace), quick ? `il video a ${height}p` : test ? 'la prova' : 'il video finale');
 
-  const out = exportPath(id, video, test, e.title);
+  const named = (t?: string) => (quick ? exportPath(id, video, test, t).replace(/\.mp4$/, ` (${height}p).mp4`) : exportPath(id, video, test, t));
+  const out = named(e.title);
   mkdirSync(dirname(out), { recursive: true });
   const tmp = `${out}.part.mp4`;
   // durata del video che esce, per la barra di avanzamento
@@ -611,27 +664,29 @@ async function esporta() {
   if (e.lucianus && !showsFacecam(e)) console.log('Lucianus della registrazione tolto dal video (resta la sua voce).');
   if (io.outro !== null) console.log(`Pezzo finale: ${basename(e.outro!.path)} (${hms(e.outro!.duration)}), finisce con il video.`);
   else if (e.outro && !outroFile(e)) console.warn(`Attenzione: il pezzo finale non c'è più (${e.outro.path}).`);
-  // Il video finale completo esce anche come copia a 720p (stessa decodifica, quasi gratis), accanto a lui:
-  // per rivederlo quando registrazioni e video finale 4K saranno stati cancellati.
-  const archTmp = `${archivePath(id)}.part.mp4`;
-  const video4k = test ? videoGraph(e, 2160, removed, io) : `${videoGraph(e, 2160, removed, io)};[v]split=2[v4k][vlo];[vlo]${archiveVideo()}[varc]`;
-  const audio = `[${audioIn}:a]${cut},volume=${gain.toFixed(2)}dB,${LIMITER}${test ? '[a]' : ',asplit=2[a][aarc]'}`;
-  if (!test) mkdirSync(dirname(archTmp), { recursive: true });
-  console.log(`Creo ${out}${test ? '' : ' e la copia a 720p'}…`);
+  // Niente più copia a 720p insieme al finale (24/11): non serviva, e sullo stesso motore video della GPU
+  // rallentava l'export da 1,84× a 1,37×. Chi la usava (scene degli short, fotogrammi per YouTube) legge il 4K.
+  const single = test || quick;
+  const video4k = videoGraph(e, height, removed, io);
+  const audio = `[${audioIn}:a]${cut},volume=${gain.toFixed(2)}dB,${LIMITER}[a]`;
+  const videoCodec = quick
+    ? ['-c:v', encoder, '-b:v', `${quickMbps}M`, ...(encoder === 'libx264' ? ['-preset', 'veryfast'] : []), '-profile:v', 'high']
+    : ['-c:v', encoder, '-b:v', `${q.final.videoMbps}M`, '-profile:v', 'main', '-tag:v', 'hvc1'];
+  console.log(`Creo ${out}…`);
   await runProgress([
     '-hide_banner', '-y', '-loglevel', 'error', ...io.args, ...mixIn,
-    '-filter_complex', video4k, '-filter_complex', audio, '-map', test ? '[v]' : '[v4k]', '-map', '[a]',
-    '-c:v', encoder, '-b:v', `${q.final.videoMbps}M`, '-profile:v', 'main', '-tag:v', 'hvc1', '-g', '30',
+    '-filter_complex', video4k, '-filter_complex', audio, '-map', '[v]', '-map', '[a]',
+    ...videoCodec, '-g', '30',
     '-colorspace', 'bt709', '-color_primaries', 'bt709', '-color_trc', 'bt709', '-color_range', 'tv',
     '-c:a', hasEncoder('aac_at') ? 'aac_at' : 'aac', '-b:a', `${q.final.audioKbps}k`, '-movflags', '+faststart', tmp,
-    ...(test ? [] : ['-map', '[varc]', '-map', '[aarc]', ...ARCHIVE_CODECS(), archTmp]),
   ], total);
-  if (!test) finishArchive(archTmp);
-  if (!test) await writeTracks(e, exportPath(id, video, false, readEdit(id)?.title));
+  if (!single) await writeTracks(e, exportPath(id, video, false, readEdit(id)?.title));
   // il nome si può cambiare dalla dashboard mentre l'export gira: vale quello di adesso
-  const dest = exportPath(id, video, test, readEdit(id)?.title);
+  const dest = named(readEdit(id)?.title);
   renameSync(tmp, dest);
-  if (!test) {
+  if (!single) {
+    // copertina per la lista dei video, dal finale (prima veniva dalla copia a 720p)
+    poster(dest);
     // il video finale compare tra i video della dashboard, pronto per gli short
     db.run('INSERT OR IGNORE INTO extra_videos (path, added_at) VALUES (?, ?)', [dest, now()]);
     // anteprima e mix non servono più: si rifanno se si torna a lavorare sui tagli
@@ -639,6 +694,31 @@ async function esporta() {
     console.log('Anteprima e mix cancellati per liberare spazio.');
   }
   console.log(`Fatto: ${dest}`);
+}
+
+/**
+ * Solo l'audio del video finale: mix (con il gioco senza canzoni di adesso), volume a −14 LUFS e limitatore come
+ * nell'export, rimontati sul video già esportato senza ricodificarlo (minuti invece di un export intero).
+ */
+async function soloAudio(e: GameplayEdit): Promise<void> {
+  const final = exportPath(id, video, false, e.title);
+  if (!existsSync(final)) throw new Error(`il video finale non c'è ancora: ${final}`);
+  const mix = await ensureMix(e);
+  const gain = await finalGain(e, mix);
+  const keep = keepExpr(removedRanges(e));
+  const cut = keep ? `aselect='${keep}',asetpts=N/SR/TB` : 'anull';
+  const q = readExport();
+  const tmp = `${final}.part.mp4`;
+  console.log(`Rimonto l'audio su ${basename(final)} (il video si copia com'è)…`);
+  await runProgress([
+    '-hide_banner', '-y', '-loglevel', 'error', '-i', final, '-i', mix,
+    '-filter_complex', `[1:a]${cut},volume=${gain.toFixed(2)}dB,${LIMITER}[a]`, '-map', '0:v:0', '-map', '[a]',
+    '-c:v', 'copy', '-c:a', hasEncoder('aac_at') ? 'aac_at' : 'aac', '-b:a', `${q.final.audioKbps}k`, '-movflags', '+faststart', tmp,
+  ], finalDuration(e));
+  renameSync(tmp, final);
+  await writeTracks(e, final);
+  for (const p of [mixPath(id), `${mixPath(id)}.json`, `${mixPath(id)}.gain.json`]) rmSync(p, { force: true });
+  console.log(`Fatto: ${final}`);
 }
 
 // ───────── gioco e voce separati per gli short ─────────
@@ -651,11 +731,12 @@ async function writeTracks(e: GameplayEdit, final: string): Promise<void> {
   const tmp = `${out}.part.m4a`;
   console.log('Salvo gioco e voce separati per gli short…');
   // con il pezzo finale, anche qui la sua voce al posto di quella del gameplay
-  const vi = await voiceInputs(e, 1);
+  const g = gameInput();
+  const vi = await voiceInputs(e, g.next);
   const src = voiceSource(e, vi, vi.outroIn !== null ? inputLufs(e, vi) : Number.NaN);
   await runProgress([
-    '-hide_banner', '-y', '-loglevel', 'error', '-i', video, ...vi.args,
-    '-filter_complex', `${src.graph}[0:a:0]${cut}[g];${src.label}${cut},pan=mono|c0=c0[v]`, '-map', '[g]', '-map', '[v]',
+    '-hide_banner', '-y', '-loglevel', 'error', '-i', video, ...g.args, ...vi.args,
+    '-filter_complex', `${src.graph}${g.label}${cut}[g];${src.label}${cut},pan=mono|c0=c0[v]`, '-map', '[g]', '-map', '[v]',
     '-c:a', hasEncoder('aac_at') ? 'aac_at' : 'aac', '-b:a', '256k', tmp,
   ], finalDuration(e));
   renameSync(tmp, out);
@@ -686,9 +767,14 @@ const ARCHIVE_CODECS = () => {
 /** Rinomina la copia finita e ne prende la copertina per la lista dei gameplay. */
 function finishArchive(tmp: string): void {
   renameSync(tmp, archivePath(id));
-  const dur = Number(Bun.spawnSync(['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', archivePath(id)]).stdout.toString()) || 60;
-  Bun.spawnSync([FFMPEG, '-hide_banner', '-loglevel', 'error', '-y', '-ss', String(Math.round(dur / 3)), '-i', archivePath(id), '-frames:v', '1', '-vf', 'scale=480:-2', '-q:v', '4', posterPath(id)]);
+  poster(archivePath(id));
   console.log(`Copia per rivedere: ${archivePath(id)}`);
+}
+
+/** Copertina per la lista dei video: un fotogramma a un terzo del video. */
+function poster(file: string): void {
+  const dur = Number(Bun.spawnSync(['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', file]).stdout.toString()) || 60;
+  Bun.spawnSync([FFMPEG, '-hide_banner', '-loglevel', 'error', '-y', '-ss', String(Math.round(dur / 3)), '-i', file, '-frames:v', '1', '-vf', 'scale=480:-2', '-q:v', '4', posterPath(id)]);
 }
 
 /** Copia a 720p da un video finale già esportato (prima che la copia si facesse insieme all'export). */
@@ -705,7 +791,22 @@ async function archivio() {
   finishArchive(tmp);
 }
 
-const commands: Record<string, () => Promise<void>> = { analizza, lingua, anteprima, esporta, archivio, tracce };
+/** Gioco senza canzoni: i tratti con una musica scelta, ricostruiti con dialoghi ed effetti originali. */
+async function musica() {
+  await rebuildGame(id, await load(), video);
+}
+
+/** Canzoni protette nella traccia del gioco (Shazam): diventano tratti da rivedere, con la musica da scegliere. */
+async function canzoni() {
+  writeEdit(id, await detectSongs(id, await load(), video));
+}
+
+/** Proposte di musica libera simile, per i tratti senza una musica scelta (o per --tratto <id>). */
+async function proposte() {
+  await proposeMusic(id, await load(), video, values.tratto);
+}
+
+const commands: Record<string, () => Promise<void>> = { analizza, lingua, anteprima, esporta, archivio, tracce, canzoni, musica, proposte };
 const fn = commands[command];
 if (!fn) {
   console.error(`comando sconosciuto: ${command}`);

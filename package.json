@@ -5,6 +5,7 @@
   "scripts": {
     "shorts": "bun src/cli.ts",
     "gameplay": "bun src/gameplay/gameplay.ts",
+    "musica": "bun src/gameplay/musica.ts",
     "story": "bun src/story/story.ts",
     "story:tools": "bun src/story/tools.ts",
     "bench": "bun src/bench/bench.ts",
@@ -12,7 +13,8 @@
     "dashboard": "bun run --cwd studio dev",
     "setup": "bun scripts/setup.ts",
     "clean": "bun scripts/clean.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
   },
   "devDependencies": {
     "@types/bun": "^1.4.4",

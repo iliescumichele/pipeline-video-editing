@@ -13,6 +13,9 @@ dependencies = [
   "opencv-python<5",
   "mlx-vlm>=0.7.4,<0.8",
   "yt-dlp",
+  "torchaudio>=2.11.1",
+  "spafe>=0.3.3",
+  "shazamio>=0.9.0",
 ]
 
 [tool.uv]

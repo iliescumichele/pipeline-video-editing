@@ -45,7 +45,7 @@ export function localEnv(extra: Record<string, string> = {}): Record<string, str
 }
 
 /** Un modello da Hugging Face (repo + revision) oppure un file scaricato direttamente (url + sha256_prefix). */
-export type ModelSpec = { dir: string; note?: string } & ({ repo: string; revision: string; include?: string[] } | { url: string; sha256_prefix: string });
+export type ModelSpec = { dir: string; note?: string } & ({ repo: string; revision: string; include?: string[] } | { url: string; sha256_prefix: string } | { git: string; commit: string });
 
 export async function readModels(): Promise<Record<string, ModelSpec>> {
   return Bun.file(join(ROOT, 'models.json')).json();

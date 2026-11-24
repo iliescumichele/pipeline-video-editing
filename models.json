@@ -39,5 +39,39 @@
     ],
     "dir": "models/whisper-small",
     "note": "Whisper small di OpenAI, usato solo per riconoscere la lingua delle frasi nel gameplay (parti in rumeno da togliere). Gira con transformers sul venv del progetto."
+  },
+  "bandit-dnr": {
+    "url": "https://github.com/ZFTurbo/Music-Source-Separation-Training/releases/download/v.1.0.3/model_bandit_plus_dnr_sdr_11.47.chpt",
+    "sha256_prefix": "c48284779f7d",
+    "dir": "models/bandit-dnr",
+    "note": "BandIt Plus su Divide and Remaster: separa il gioco in dialoghi, musica ed effetti (sostituzione delle canzoni protette). Pesi senza licenza dichiarata, scaricabili gratis; codice MIT (ZFTurbo) e Apache-2.0 (originale)."
+  },
+  "bandit-dnr-config": {
+    "url": "https://github.com/ZFTurbo/Music-Source-Separation-Training/releases/download/v.1.0.3/config_dnr_bandit_bsrnn_multi_mus64.yaml",
+    "sha256_prefix": "c62d316a8ac0",
+    "dir": "models/bandit-dnr",
+    "note": "Configurazione del modello BandIt Plus DnR (44,1 kHz, stereo, stem speech/music/effects)."
+  },
+  "msst-code": {
+    "git": "https://github.com/ZFTurbo/Music-Source-Separation-Training.git",
+    "commit": "1523206d12a521bdb20673726562524cf0f9635b",
+    "dir": ".tools/msst",
+    "note": "Codice di ZFTurbo (MIT): da qui si carica solo l'architettura di BandIt (python/separate_cinematic.py), senza le librerie di training."
+  },
+  "clap": {
+    "repo": "laion/clap-htsat-unfused",
+    "revision": "8fa0f1c6d0433df6e97c127f64b2a1d6c0dcda8a",
+    "include": [
+      "config.json",
+      "preprocessor_config.json",
+      "pytorch_model.bin",
+      "merges.txt",
+      "vocab.json",
+      "tokenizer.json",
+      "tokenizer_config.json",
+      "special_tokens_map.json"
+    ],
+    "dir": "models/clap-htsat-unfused",
+    "note": "LAION CLAP (Apache-2.0): impronta sonora di musica e descrizioni, per proporre la musica libera più simile alla canzone da sostituire."
   }
 }

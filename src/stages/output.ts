@@ -212,7 +212,7 @@ async function buildReport(ctx: Ctx, ing: Ingest, sig: Signals, cands: Candidate
   lines.push('## Modelli e chiamate', '');
   lines.push(`- Chiamate a Claude (\`claude -p --model sonnet\`, abbonamento): **${claude.reduce((a, x) => a + (x.attempts ?? 1), 0)}** (${claude.length} short, ${claude.reduce((a, x) => a + x.duration_s, 0).toFixed(0)} s in tutto)`);
   for (const [t, ms] of qwen) lines.push(`- Qwen (${process.env.LUCIO_MODEL_KEY ?? 'LUCIO_MODEL_KEY'}) per ${t}: ${ms.length} chiamate, ${ms.reduce((a, x) => a + x.duration_s, 0).toFixed(0)} s`);
-  for (const [name, spec] of Object.entries(models)) lines.push(`- ${name}: ${'repo' in spec ? `${spec.repo}@${spec.revision.slice(0, 7)}` : spec.url}`);
+  for (const [name, spec] of Object.entries(models)) lines.push(`- ${name}: ${'repo' in spec ? `${spec.repo}@${spec.revision.slice(0, 7)}` : 'git' in spec ? `${spec.git}@${spec.commit.slice(0, 7)}` : spec.url}`);
   lines.push(`- Remotion ${remotion}`);
   lines.push(`- ffmpeg di sistema: \`${await ffmpegVersion()}\``, '');
 

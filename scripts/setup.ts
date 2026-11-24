@@ -51,6 +51,17 @@ await step('Python 3.12 e librerie', async () => {
 await step('Modelli', async () => {
   for (const [name, m] of Object.entries(await readModels())) {
     const dir = join(ROOT, m.dir);
+    if ('git' in m) {
+      // codice da una repo git, a un commit fisso
+      if (existsSync(join(dir, '.git')) && Bun.spawnSync(['git', '-C', dir, 'rev-parse', 'HEAD']).stdout.toString().trim() === m.commit) {
+        console.log(`  ${name}: già presente (${m.commit.slice(0, 7)})`);
+        continue;
+      }
+      rmSync(dir, { recursive: true, force: true });
+      await run(['git', 'clone', '-q', m.git, dir]);
+      await run(['git', '-C', dir, 'checkout', '-q', m.commit]);
+      continue;
+    }
     if ('url' in m) {
       const file = join(dir, basename(new URL(m.url).pathname));
       if (await Bun.file(file).exists()) {

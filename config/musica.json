@@ -1,0 +1,14 @@
+{
+  "enabled": true,
+  "library": "data/musica-libera",
+  "windowS": 12,
+  "coarseHopS": 24,
+  "hopS": 6,
+  "pauseS": 3,
+  "silenceDb": -50,
+  "minHits": 2,
+  "fadeS": 1.5,
+  "marginS": 6,
+  "maxGainDb": 12,
+  "musicSilenceDb": -65
+}
