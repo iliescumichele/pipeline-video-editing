@@ -294,7 +294,7 @@ export function saveGameplayMeta(id: string, patch: GameplayMeta) {
   const next: GameplayEdit = { ...e };
   if (patch.mix) {
     if (!DUCKS.includes(patch.mix.duck)) throw new Error('livello del gioco sconosciuto');
-    const eq = patch.mix.eq ?? 'chiara';
+    const eq = patch.mix.eq ?? DEFAULT_MIX.eq!;
     if (!(eq in VOICE_PRESETS)) throw new Error('tipo di voce sconosciuto');
     next.mix = { voiceDb: Math.max(-6, Math.min(15, Math.round(Number(patch.mix.voiceDb) * 2) / 2 || 0)), duck: patch.mix.duck, clear: !!patch.mix.clear, eq };
   }

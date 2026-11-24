@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AudioMix, Cut, CutReason, Duck } from '../../../src/gameplay/edit';
 import { VOICE_PRESETS, type VoicePreset } from '../../../src/lib/voice-eq';
 
-/** I tipi di voce, nell'ordine dei tasti 1–6 del player */
+/** I tipi di voce, nell'ordine dei tasti 1–7 del player */
 const PRESET_KEYS = Object.keys(VOICE_PRESETS) as VoicePreset[];
 import { ExportQuality } from '../components/export-quality';
 import { RecordingPlayer } from '../components/recording-player';
@@ -683,7 +683,7 @@ function MixCard({ id, mix }: { id: string; mix: AudioMix }) {
         <span className="muted">{draft.clear ? VOICE_PRESETS[draft.eq ?? 'chiara'].hint : 'Nessuna equalizzazione: solo pulizia e compressione morbida.'}</span>
       </div>
       <div className="small muted" style={{ marginTop: 8 }}>
-        La voce viene compressa (livello costante) e alzata di quanto scegli; il gioco scende da solo mentre parli e risale nelle pause. Il video finale poi esce a −14 LUFS con i picchi sotto −1,5 dBTP. Nel player (Tracce) senti subito equalizzazione e compressione della voce, con i tasti 0–6; il compressore sul gioco di Anti-picchi, Morbida e Radio si sente solo nel mix finale da ascoltare o in una prova di 30 s.
+        La voce viene compressa (livello costante) e alzata di quanto scegli; il gioco scende da solo mentre parli e risale nelle pause. Il video finale poi esce a −14 LUFS con i picchi sotto −1,5 dBTP. Nel player (Tracce) senti subito equalizzazione e compressione della voce, con i tasti 0–7; il compressore sul gioco di Anti-picchi, Morbida e Radio si sente solo nel mix finale da ascoltare o in una prova di 30 s.
       </div>
     </div>
   );

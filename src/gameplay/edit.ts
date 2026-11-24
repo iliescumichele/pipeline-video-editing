@@ -34,11 +34,15 @@ export interface AudioMix {
   duck: Duck;
   /** "Voce più chiara": l'equalizzazione di src/lib/voice-eq.ts (senza, solo il passa-alto; pulizia e compressione ci sono sempre) */
   clear: boolean;
-  /** quale dei cinque tipi di voce (equalizzazione e compressione, vedi VOICE_PRESETS); senza, "chiara" */
+  /** quale tipo di voce (equalizzazione e compressione, vedi VOICE_PRESETS); senza, quello di DEFAULT_MIX */
   eq?: VoicePreset;
 }
 
-export const DEFAULT_MIX: AudioMix = { voiceDb: 2, duck: 'medio', clear: true, eq: 'chiara' };
+/**
+ * Di base la voce non si pulisce: dal 23/11 lo fanno i filtri di OBS. I gameplay registrati prima hanno il loro
+ * tipo salvato in edit.json ("chiara" o "obs").
+ */
+export const DEFAULT_MIX: AudioMix = { voiceDb: 2, duck: 'medio', clear: true, eq: 'nessuna' };
 
 /**
  * Dove sta Lucianus nel video: angolo in alto a sinistra (x, y) e altezza (h), in frazioni del fotogramma,

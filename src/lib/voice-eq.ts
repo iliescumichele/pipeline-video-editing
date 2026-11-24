@@ -71,7 +71,7 @@ const LESS_BASS: VoiceBand[] = [
   { type: 'highshelf', f: 9000, g: 5 },
 ];
 
-export type VoicePreset = 'chiara' | 'meno-bassi' | 'anti-picchi' | 'morbida' | 'radio' | 'obs';
+export type VoicePreset = 'chiara' | 'meno-bassi' | 'anti-picchi' | 'morbida' | 'radio' | 'obs' | 'nessuna';
 
 export interface VoiceProfile {
   label: string;
@@ -92,6 +92,12 @@ export interface VoiceProfile {
   obsChain?: boolean;
   /** equalizzazione per l'anteprima nel browser, se diversa da `bands` (per "obs": quella di OBS, approssimata) */
   previewBands?: VoiceBand[];
+  /**
+   * Nessuna pulizia: la voce è già sistemata dai filtri di OBS (dal 24/11). Niente gate, riduzione del rumore,
+   * equalizzazione o compressione: si porta solo a VOICE_OUT_LUFS, così volume della voce e ducking tengono
+   * l'equilibrio di sempre col gioco.
+   */
+  raw?: boolean;
 }
 
 /**
@@ -165,6 +171,15 @@ export const VOICE_PRESETS: Record<VoicePreset, VoiceProfile> = {
       { type: 'highshelf', f: 5000, g: 10.5 },
     ],
   },
+  nessuna: {
+    label: 'Già pulita in OBS',
+    hint: 'Nessuna pulizia: la voce resta com’è uscita dai filtri di OBS, solo portata al volume giusto per il mix. Per le registrazioni dal 23/11.',
+    bands: [],
+    dynamics: '',
+    loss: 0,
+    preview: { threshold: 0, ratio: 1, attack: 0.003, release: 0.25, knee: 0 },
+    raw: true,
+  },
 };
 
 export const voiceProfile = (preset: VoicePreset | undefined): VoiceProfile => VOICE_PRESETS[preset ?? 'chiara'] ?? VOICE_PRESETS.chiara;
@@ -174,7 +189,8 @@ let graphs = 0;
 /**
  * Catena completa della voce, come pezzo di filter_complex da `input` (per esempio "[0:a:1]") all'etichetta
  * `output`: livello di partenza, gate anti-clic, riduzione del rumore, equalizzazione del tipo scelto (con `clear`,
- * altrimenti solo il passa-alto a 80 Hz) e compressione del tipo scelto; esce a VOICE_OUT_LUFS.
+ * altrimenti solo il passa-alto a 80 Hz) e compressione del tipo scelto; esce a VOICE_OUT_LUFS. Il tipo "nessuna"
+ * (voce già pulita in OBS) salta tutto e regola solo il volume.
  * `inputLufs` è il volume della voce grezza misurato su un segnale con `channels` canali (il mono misura 3 dB meno).
  */
 export function voiceGraph(input: string, output: string, inputLufs: number, clear: boolean, channels: 1 | 2 = 2, preset?: VoicePreset): string {
@@ -184,6 +200,8 @@ export function voiceGraph(input: string, output: string, inputLufs: number, cle
   const inGain = Number.isFinite(stereoLufs) ? Math.max(-20, Math.min(30, VOICE_IN_LUFS - stereoLufs)) : 0;
   const outGain = VOICE_OUT_LUFS - (VOICE_IN_LUFS - p.loss);
   // etichette interne uniche, nel caso un grafo contenga più catene
+  // già pulita in OBS: solo il volume, dal livello misurato a quello d'uscita
+  if (p.raw) return `${input}volume=${(Number.isFinite(stereoLufs) ? Math.max(-20, Math.min(30, VOICE_OUT_LUFS - stereoLufs)) : 0).toFixed(2)}dB[${output}]`;
   const n = graphs++;
   const [v, k, vd, key] = ['v', 'k', 'vd', 'key'].map((l) => `[voce${n}${l}]`);
   return [

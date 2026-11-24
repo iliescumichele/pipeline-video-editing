@@ -147,7 +147,8 @@ function useVoiceGain(el: RefObject<HTMLVideoElement | null>, gain: number, mute
     g.src.disconnect();
     for (const n of g.chain) n.disconnect();
     g.chain = [];
-    if (settings.current.clear) {
+    // "Già pulita in OBS": la voce passa com'è
+    if (settings.current.clear && !voiceProfile(settings.current.preset).raw) {
       const p = voiceProfile(settings.current.preset);
       for (const b of p.previewBands ?? p.bands) {
         const f = g.ctx.createBiquadFilter();
@@ -341,7 +342,7 @@ export function RecordingPlayer({
     v.volume = mixer.game;
   }, [video, mode, mixer.game, mixer.gameMuted]);
 
-  // G e V: mute veloce di gioco e voce; C: equalizzazione sì o no; 0–6: tipo di voce (fuori dai campi di testo)
+  // G e V: mute veloce di gioco e voce; C: equalizzazione sì o no; 0–7: tipo di voce (fuori dai campi di testo)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.metaKey || e.ctrlKey || mode !== 'tracce') return;
@@ -543,7 +544,7 @@ export function RecordingPlayer({
               />
             ) : null}
             {lucianus && (
-              <label className="row small" style={{ width: 'auto', gap: 6 }} title="Equalizzazione e compressione della voce, come nel video finale e negli short. Tasti 1–6 per cambiarla al volo, 0 per spegnerla, C per confrontare. Vale per questo video.">
+              <label className="row small" style={{ width: 'auto', gap: 6 }} title="Equalizzazione e compressione della voce, come nel video finale e negli short. Tasti 1–7 per cambiarla al volo, 0 per spegnerla, C per confrontare. Vale per questo video.">
                 Voce
                 <select
                   value={clearVoice ? preset : 'spenta'}
