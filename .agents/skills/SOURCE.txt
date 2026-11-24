@@ -1,0 +1,2 @@
+remotion-dev/skills@3e20ac75161bc34468845df714701cc9bf6075f4 (scaricate il 2026-11-18 dal tarball GitHub, senza npx)
+Per aggiornarle: rifare il download allo stesso modo; `remotion skills update` userebbe npx e la cache globale di npm.

@@ -1,0 +1,31 @@
+{
+  "_note": "names: forma corretta → varianti sbagliate (minuscole, anche di più parole). Le forme corrette si correggono anche nelle maiuscole. Per i nomi di almeno 6 lettere si correggono pure le parole a distanza 1 (es. Leonita → Leonida). exclamations: frasi che contano come reazione nella trascrizione, per lingua.",
+  "names": {
+    "Lucia": ["lucía", "lucha", "luchia", "loosha", "lucia's"],
+    "Jason": ["jayson", "jaison", "jasen"],
+    "Lucia Caminos": ["lucia caminos", "lucia camino"],
+    "Jason Duval": ["jason duvall", "jason du val", "jason doval"],
+    "Leonida": ["leonidas", "leonita", "leo nida", "leonide", "lionida"],
+    "Leonida Keys": ["leonida key", "leonidas keys"],
+    "Vice City": ["vice cities", "vicecity", "vice-city", "vise city", "nice city"],
+    "Port Gellhorn": ["port gelhorn", "port gel horn", "port gellhorne"],
+    "Grassrivers": ["grass rivers", "grass river"],
+    "Ambrosia": ["ambrosía"],
+    "Mount Kalaga": ["mount kalaga", "mount calaga", "mount kalagah"],
+    "Boobie Ike": ["booby ike", "boobie ike", "bobby ike"],
+    "Dre'Quan Priest": ["dre quan priest", "drequan priest", "dre'quan"],
+    "Real Dimez": ["real dimes", "real dims"],
+    "Raul Bautista": ["raul batista", "raúl bautista"],
+    "Brian Heder": ["brian header", "brian heeder"],
+    "Cal Hampton": ["cal hamton", "kal hampton"],
+    "Los Santos": ["los santo", "lo santos", "las santos"],
+    "Rockstar": ["rock star"],
+    "GTA": ["g t a", "gta's"],
+    "GTA 6": ["gta six", "gta sei", "gta vi"],
+    "GTA 5": ["gta five", "gta cinque", "gta v"]
+  },
+  "exclamations": {
+    "en": ["no way", "oh my god", "oh my gosh", "omg", "bro", "bruh", "dude", "what the", "let's go", "lets go", "are you kidding", "you're kidding", "holy", "no no no", "yes yes yes", "go go go", "oh no", "hell no", "come on", "wait wait", "insane", "crazy", "unbelievable", "run", "help"],
+    "it": ["oddio", "o dio", "madonna", "mamma mia", "no vabbè", "ma che", "ma dai", "e dai", "non ci credo", "assurdo", "pazzesco", "aspetta aspetta", "andiamo", "vai vai", "corri", "ma cosa", "che cosa", "porca", "fantastico", "incredibile", "ma come", "che schifo", "basta", "aiuto", "no no no", "sì sì sì"]
+  }
+}

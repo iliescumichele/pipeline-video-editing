@@ -1,0 +1,45 @@
+{
+  "type": "object",
+  "properties": {
+    "titles": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "properties": {
+          "title": { "type": "string", "maxLength": 100 },
+          "why": { "type": "string", "maxLength": 300 }
+        },
+        "required": ["title", "why"],
+        "additionalProperties": false
+      }
+    },
+    "thumbnail": {
+      "type": "object",
+      "properties": {
+        "upload": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4,
+          "items": {
+            "type": "object",
+            "properties": {
+              "file": { "type": "string" },
+              "role": { "type": "string", "maxLength": 120 }
+            },
+            "required": ["file", "role"],
+            "additionalProperties": false
+          }
+        },
+        "prompt": { "type": "string", "maxLength": 3000 },
+        "text": { "type": "string", "maxLength": 40 },
+        "notes": { "type": "string", "maxLength": 600 }
+      },
+      "required": ["upload", "prompt", "text", "notes"],
+      "additionalProperties": false
+    }
+  },
+  "required": ["titles", "thumbnail"],
+  "additionalProperties": false
+}

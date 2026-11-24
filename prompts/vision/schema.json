@@ -1,0 +1,110 @@
+{
+  "type": "object",
+  "properties": {
+    "what": {
+      "type": "string",
+      "maxLength": 400
+    },
+    "graphic_violence_first7s": {
+      "type": "boolean"
+    },
+    "violence_note": {
+      "type": "string",
+      "maxLength": 200
+    },
+    "cutscene": {
+      "type": "boolean"
+    },
+    "ingame_screen": {
+      "type": "boolean"
+    },
+    "standalone": {
+      "type": "boolean"
+    },
+    "standalone_why": {
+      "type": "string",
+      "maxLength": 300
+    },
+    "overlays": {
+      "type": "array",
+      "maxItems": 6,
+      "items": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string"
+          },
+          "x0": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "y0": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "x1": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "y1": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          }
+        },
+        "required": [
+          "kind",
+          "x0",
+          "y0",
+          "x1",
+          "y1"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "action_x": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "wide_shot": {
+      "type": "boolean"
+    },
+    "webcam_tiles": {
+      "type": "array",
+      "maxItems": 12,
+      "items": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 12
+      }
+    },
+    "cutscene_tiles": {
+      "type": "array",
+      "maxItems": 12,
+      "items": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 12
+      }
+    }
+  },
+  "required": [
+    "what",
+    "graphic_violence_first7s",
+    "violence_note",
+    "cutscene",
+    "ingame_screen",
+    "standalone",
+    "standalone_why",
+    "overlays",
+    "action_x",
+    "wide_shot",
+    "webcam_tiles",
+    "cutscene_tiles"
+  ],
+  "additionalProperties": false
+}

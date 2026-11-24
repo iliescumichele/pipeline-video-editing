@@ -1,0 +1,30 @@
+{
+  "type": "object",
+  "properties": {
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "i": { "type": "integer", "minimum": 1 },
+          "verdict": { "type": "string", "enum": ["supported", "partial", "unsupported", "no_text"] },
+          "evidence": { "type": "string", "maxLength": 300 },
+          "fix": { "type": "string", "maxLength": 300 }
+        },
+        "required": ["i", "verdict", "evidence", "fix"],
+        "additionalProperties": false
+      }
+    },
+    "uncovered": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": { "sentence": { "type": "string", "maxLength": 400 }, "note": { "type": "string", "maxLength": 200 } },
+        "required": ["sentence", "note"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["checks", "uncovered"],
+  "additionalProperties": false
+}

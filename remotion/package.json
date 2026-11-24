@@ -1,0 +1,17 @@
+{
+  "name": "lucio-shorts-remotion",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@fontsource/montserrat": "5.3.0",
+    "@remotion/cli": "4.0.544",
+    "@remotion/media": "4.0.544",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "remotion": "4.0.544"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.2",
+    "typescript": "7.0.2"
+  }
+}

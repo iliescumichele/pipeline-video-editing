@@ -1,0 +1,167 @@
+{
+ "id": "v20-shark",
+ "source": "/Users/micheleiliescu/Developer/pipeline-video-content-long-short/out/2026-11-20-02-51-12-ee1051ef/Secondo video.mp4",
+ "faceSource": "/Users/micheleiliescu/Developer/pipeline-video-content-long-short/out/2026-11-20-02-51-12-ee1051ef/copia-720p.mp4",
+ "lucio": {
+  "x": 937,
+  "y": 470,
+  "w": 166,
+  "h": 250
+ },
+ "transcript": "/Users/micheleiliescu/Developer/pipeline-video-content-long-short/work/2026-11-20-02-51-12-ee1051ef/02-transcribe/transcript.json",
+ "layout": "split",
+ "hook": "bachelor party scuba trip. what could go wrong",
+ "hookDur": 2.4,
+ "segments": [
+  {
+   "s": 901,
+   "e": 905.2,
+   "crop": [
+    0,
+    0,
+    2728,
+    2046
+   ]
+  },
+  {
+   "s": 933.5,
+   "e": 937.4,
+   "crop": [
+    0,
+    0,
+    2728,
+    2046
+   ]
+  },
+  {
+   "s": 1147,
+   "e": 1152.3,
+   "lift": true
+  },
+  {
+   "s": 1178.3,
+   "e": 1182.2,
+   "lift": true
+  },
+  {
+   "s": 1231,
+   "e": 1247.3,
+   "cx": 0.56
+  },
+  {
+   "s": 1435.3,
+   "e": 1442
+  }
+ ],
+ "cards": [
+  {
+   "say": [
+    901,
+    905.0
+   ]
+  },
+  {
+   "say": [
+    933.6,
+    937.3
+   ]
+  },
+  {
+   "tag": "*the ocean heard him*",
+   "at": 1147.1,
+   "dur": 1.1,
+   "color": "#FF3B3B"
+  },
+  {
+   "say": [
+    1148.2,
+    1151.2
+   ]
+  },
+  {
+   "tag": "\"this is hilarious. this sh*t's gonna go viral!\"",
+   "at": 1178.4,
+   "dur": 2.2,
+   "color": "#FFFFFF"
+  },
+  {
+   "tag": "*best man of the year*",
+   "at": 1180.6,
+   "dur": 1.6,
+   "color": "#FFD23F"
+  },
+  {
+   "tag": "\"uh... is that a shark?\"",
+   "at": 1231.1,
+   "dur": 1.8,
+   "color": "#FFFFFF"
+  },
+  {
+   "big": "HE ASKED FOR THIS",
+   "at": 1233.0,
+   "dur": 1.8
+  },
+  {
+   "tag": "*cardio workout: unlocked*",
+   "at": 1236.9,
+   "dur": 1.1
+  },
+  {
+   "tag": "\"use the f*cking speargun, dive guy!\"",
+   "at": 1238.0,
+   "dur": 2.8,
+   "color": "#FFFFFF"
+  },
+  {
+   "tag": "\"shoot it!\"",
+   "at": 1240.9,
+   "dur": 1.8,
+   "color": "#FF3B3B"
+  },
+  {
+   "tag": "*shark: handled*",
+   "at": 1243.2,
+   "dur": 1.7,
+   "color": "#FFD23F"
+  },
+  {
+   "say": [
+    1245.0,
+    1247.3
+   ],
+   "text": "nice."
+  },
+  {
+   "say": [
+    1435.3,
+    1440.6
+   ]
+  }
+ ],
+ "flashes": [
+  {
+   "at": 1147.1,
+   "color": "#FF3B3B"
+  },
+  {
+   "at": 1233.0,
+   "color": "#FFFFFF"
+  },
+  {
+   "at": 1241.0,
+   "color": "#FF3B3B"
+  }
+ ],
+ "zooms": [
+  1233.0,
+  1241.0
+ ],
+ "shakes": [
+  1147.1,
+  1233.0
+ ],
+ "end": {
+  "text": "5 stars on Tripadvisor \u2b50",
+  "dur": 1.4
+ }
+}

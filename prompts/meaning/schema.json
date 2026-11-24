@@ -1,0 +1,27 @@
+{
+  "type": "object",
+  "properties": {
+    "notes": { "type": "string", "maxLength": 800 },
+    "moments": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "properties": {
+          "kind": { "type": "string", "enum": ["setup_punchline", "story", "quote", "reaction"] },
+          "start": { "type": "number" },
+          "turn": { "type": "number" },
+          "end": { "type": "number" },
+          "quote": { "type": "string", "maxLength": 200 },
+          "why": { "type": "string", "maxLength": 300 },
+          "strength": { "type": "integer", "minimum": 1, "maximum": 10 }
+        },
+        "required": ["kind", "start", "turn", "end", "quote", "why", "strength"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["notes", "moments"],
+  "additionalProperties": false
+}

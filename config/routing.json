@@ -1,0 +1,82 @@
+{
+  "_note": "Chi fa cosa. provider: local (LM Studio, model = chiave del modello), claude (claude -p sull'abbonamento, model = haiku|sonnet|opus|fable, effort = low|medium|high|xhigh|max) o clef (Clef-Flash in locale). Si cambia anche dalla dashboard.",
+  "tasks": {
+    "meaning": {
+      "provider": "claude",
+      "model": "haiku"
+    },
+    "vision": {
+      "provider": "claude",
+      "model": "haiku"
+    },
+    "rank": {
+      "provider": "claude",
+      "model": "opus",
+      "effort": "medium"
+    },
+    "copy": {
+      "provider": "claude",
+      "model": "opus",
+      "effort": "medium"
+    },
+    "news_triage": {
+      "provider": "clef"
+    },
+    "news_script": {
+      "provider": "claude",
+      "model": "opus",
+      "effort": "medium"
+    },
+    "news_factcheck": {
+      "provider": "claude",
+      "model": "haiku"
+    },
+    "media": {
+      "provider": "claude",
+      "model": "haiku"
+    },
+    "judge": {
+      "provider": "claude",
+      "model": "opus",
+      "effort": "high"
+    },
+    "youtube": {
+      "provider": "claude",
+      "model": "opus",
+      "effort": "medium"
+    }
+  },
+  "candidates": [
+    {
+      "id": "qwen27b",
+      "label": "Qwen3.8 27B (locale)",
+      "provider": "local",
+      "model": "qwen/qwen3.8-27b"
+    },
+    {
+      "id": "gemma4",
+      "label": "Gemma 4 26B-A4B (locale)",
+      "provider": "local",
+      "model": "google/gemma-4-26b-a4b"
+    },
+    {
+      "id": "haiku",
+      "label": "Claude Haiku 5.5",
+      "provider": "claude",
+      "model": "haiku"
+    },
+    {
+      "id": "sonnet",
+      "label": "Claude Sonnet 5.5",
+      "provider": "claude",
+      "model": "sonnet"
+    },
+    {
+      "id": "opus-medium",
+      "label": "Claude Opus 5.5 (effort medium)",
+      "provider": "claude",
+      "model": "opus",
+      "effort": "medium"
+    }
+  ]
+}

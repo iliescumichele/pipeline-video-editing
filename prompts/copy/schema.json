@@ -1,0 +1,30 @@
+{
+  "type": "object",
+  "properties": {
+    "hook": { "type": "string", "maxLength": 40, "pattern": "^\\S+(\\s+\\S+){1,5}$" },
+    "youtube": { "$ref": "#/$defs/platform" },
+    "instagram": { "$ref": "#/$defs/platform" },
+    "tiktok": { "$ref": "#/$defs/platform" },
+    "score": { "type": "integer", "minimum": 1, "maximum": 10 },
+    "score_reason": { "type": "string", "maxLength": 400 }
+  },
+  "required": ["hook", "youtube", "instagram", "tiktok", "score", "score_reason"],
+  "additionalProperties": false,
+  "$defs": {
+    "platform": {
+      "type": "object",
+      "properties": {
+        "title": { "type": "string", "maxLength": 100 },
+        "description": { "type": "string", "maxLength": 500 },
+        "hashtags": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 5,
+          "items": { "type": "string", "pattern": "^#[A-Za-z0-9_]+$" }
+        }
+      },
+      "required": ["title", "description", "hashtags"],
+      "additionalProperties": false
+    }
+  }
+}

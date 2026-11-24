@@ -1,0 +1,19 @@
+{"id":"v22-throttle","source":"/Users/micheleiliescu/Developer/pipeline-video-content-long-short/out/2026-11-22-18-23-35-3c6ce25b/Picking up lucia - ep 3.mp4","transcript":"/Users/micheleiliescu/Developer/pipeline-video-content-long-short/work/2026-11-22-18-23-35-3c6ce25b/02-transcribe/transcript.json","layout":"panel",
+ "header":"he explained [throttle control] to his girlfriend",
+ "segments":[{"s":163.5,"e":172.5},{"s":311,"e":317},{"s":453.5,"e":462.5},{"s":468.5,"e":476},{"s":486,"e":494},{"s":494,"e":499},{"s":508.5,"e":513}],
+ "cards":[
+  {"tag":"*3 minutes into the episode*","at":163.5,"dur":1.4},
+  {"say":[166.9,169.2]},
+  {"say":[313.2,316.8]},
+  {"tag":"*he did not fix the car*","at":316.0,"dur":1.0,"color":"#FF3B3B"},
+  {"tag":"*driving instructor mode*","at":453.5,"dur":1.0,"color":"#FFD23F"},
+  {"say":[454.3,462.5]},
+  {"say":[468.8,475.3]},
+  {"big":"LESSON 1","at":475.0,"dur":1.0},
+  {"say":[486,491.9]},
+  {"say":[493.2,499]},
+  {"tag":"*it was his fault*","at":497.2,"dur":1.8,"color":"#FF3B3B"}
+ ],
+ "flashes":[{"at":165.0,"color":"#FF3B3B"},{"at":475.0,"color":"#FFFFFF"},{"at":490.0,"color":"#FF3B3B"}],
+ "zooms":[165.0,475.0,490.0],"shakes":[165.0,475.0,490.0],
+ "end":{"text":"groceries acquired 🛒","dur":1.8}}

@@ -1,0 +1,172 @@
+{
+ "id": "v20-scooter",
+ "source": "/Users/micheleiliescu/Developer/pipeline-video-content-long-short/out/2026-11-20-02-51-12-ee1051ef/Secondo video.mp4",
+ "faceSource": "/Users/micheleiliescu/Developer/pipeline-video-content-long-short/out/2026-11-20-02-51-12-ee1051ef/copia-720p.mp4",
+ "lucio": {
+  "x": 937,
+  "y": 470,
+  "w": 166,
+  "h": 250
+ },
+ "transcript": "/Users/micheleiliescu/Developer/pipeline-video-content-long-short/work/2026-11-20-02-51-12-ee1051ef/02-transcribe/transcript.json",
+ "layout": "split",
+ "hook": "she asked me to steal her friend's mobility scooter",
+ "hookDur": 2.6,
+ "segments": [
+  {
+   "s": 105.3,
+   "e": 109.0,
+   "crop": [
+    0,
+    0,
+    2728,
+    2046
+   ]
+  },
+  {
+   "s": 113.3,
+   "e": 116.0,
+   "crop": [
+    0,
+    0,
+    2728,
+    2046
+   ]
+  },
+  {
+   "s": 1622.5,
+   "e": 1629.5
+  },
+  {
+   "s": 1630.8,
+   "e": 1634.5
+  },
+  {
+   "s": 1636,
+   "e": 1641,
+   "cx": 0.375
+  },
+  {
+   "s": 1650.5,
+   "e": 1659.5
+  },
+  {
+   "s": 1660.5,
+   "e": 1663.5
+  },
+  {
+   "s": 1706.5,
+   "e": 1708.3
+  },
+  {
+   "s": 1715.3,
+   "e": 1719.5
+  }
+ ],
+ "cards": [
+  {
+   "tag": "\"ever since she got that scooter she gave up on life\"",
+   "at": 105.4,
+   "dur": 3.5,
+   "color": "#FFFFFF"
+  },
+  {
+   "tag": "\"so I want you to steal it\"",
+   "at": 113.4,
+   "dur": 2.5,
+   "color": "#FFD23F"
+  },
+  {
+   "tag": "\"I'm calling your supervisor!\"",
+   "at": 1622.6,
+   "dur": 4.8,
+   "color": "#FFFFFF"
+  },
+  {
+   "tag": "\"sorry, someone else needs it\"",
+   "at": 1627.5,
+   "dur": 2.0,
+   "color": "#FFFFFF"
+  },
+  {
+   "tag": "*getaway speed: 4 mph*",
+   "at": 1630.9,
+   "dur": 2.5
+  },
+  {
+   "tag": "\"this is ableist!\"",
+   "at": 1633.4,
+   "dur": 1.1,
+   "color": "#FFFFFF"
+  },
+  {
+   "big": "SHE CAN RUN??",
+   "at": 1636.2,
+   "dur": 1.8
+  },
+  {
+   "say": [
+    1638.2,
+    1640.4
+   ]
+  },
+  {
+   "tag": "\"ow, my hip! I think it's broken!\"",
+   "at": 1650.6,
+   "dur": 3.1,
+   "color": "#FFFFFF"
+  },
+  {
+   "tag": "*now she can't* \ud83d\udc80",
+   "at": 1653.7,
+   "dur": 1.6,
+   "color": "#FF3B3B"
+  },
+  {
+   "say": [
+    1655.3,
+    1659.4
+   ],
+   "text": "oh sh*t, I feel bad a little bit"
+  },
+  {
+   "tag": "\"oh my God, you didn't!\"",
+   "at": 1660.6,
+   "dur": 2.9,
+   "color": "#FFFFFF"
+  },
+  {
+   "tag": "\"will Peggy be okay without it?\"",
+   "at": 1706.6,
+   "dur": 1.7,
+   "color": "#FFFFFF"
+  },
+  {
+   "tag": "\"it's for her own good. we have to protect her from herself\"",
+   "at": 1715.4,
+   "dur": 2.9,
+   "color": "#FFD23F"
+  }
+ ],
+ "flashes": [
+  {
+   "at": 1636.2,
+   "color": "#FFFFFF"
+  },
+  {
+   "at": 1650.6,
+   "color": "#FF3B3B"
+  }
+ ],
+ "zooms": [
+  1636.2,
+  1650.6
+ ],
+ "shakes": [
+  1650.6
+ ],
+ "end": {
+  "text": "mental health: protected \ud83d\ude07",
+  "dur": 1.3
+ }
+}

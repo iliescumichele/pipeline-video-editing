@@ -1,0 +1,11 @@
+{
+  "final": {
+    "videoMbps": 60,
+    "audioKbps": 320
+  },
+  "review": {
+    "videoMbps": 2.5,
+    "fps": 30,
+    "audioKbps": 128
+  }
+}

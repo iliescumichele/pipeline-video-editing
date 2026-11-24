@@ -1,0 +1,20 @@
+{
+  "type": "object",
+  "properties": {
+    "scenes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "scene": { "type": "integer", "minimum": 1 },
+          "shots": { "type": "array", "items": { "type": "integer" } },
+          "note": { "type": "string", "maxLength": 200 }
+        },
+        "required": ["scene", "shots", "note"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["scenes"],
+  "additionalProperties": false
+}

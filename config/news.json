@@ -1,0 +1,19 @@
+{
+  "_note": "Fonti delle notizie (feed RSS/Atom pubblici, senza chiavi). Con filter: true si tengono solo le notizie che contengono una delle parole di 'require'. Reddit non è incluso: senza account risponde 404/429.",
+  "require": ["GTA", "Grand Theft Auto", "Rockstar Games", "Vice City", "Leonida", "Take-Two"],
+  "sources": [
+    { "id": "google-news", "name": "Google News", "url": "https://news.google.com/rss/search?q=%22GTA+6%22+OR+%22GTA+VI%22&hl=en-US&gl=US&ceid=US:en", "filter": false },
+    { "id": "rockstar-youtube", "name": "Rockstar Games (YouTube)", "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UC6VcWc1rAoWdBCM0JxrRQ3A", "filter": false },
+    { "id": "vgc", "name": "VGC", "url": "https://www.videogameschronicle.com/feed/", "filter": true },
+    { "id": "eurogamer", "name": "Eurogamer", "url": "https://www.eurogamer.net/feed", "filter": true },
+    { "id": "pcgamer", "name": "PC Gamer", "url": "https://www.pcgamer.com/rss/", "filter": true },
+    { "id": "gamespot", "name": "GameSpot", "url": "https://www.gamespot.com/feeds/news/", "filter": true },
+    { "id": "insider-gaming", "name": "Insider Gaming", "url": "https://insider-gaming.com/feed/", "filter": true },
+    { "id": "ign", "name": "IGN", "url": "https://www.ign.com/rss/articles/feed", "filter": true }
+  ],
+  "embedding_model": "text-embedding-nomic-embed-text-v1.5",
+  "same_story_similarity": 0.85,
+  "story_window_hours": 72,
+  "max_age_days": 7,
+  "score_half_life_hours": 48
+}

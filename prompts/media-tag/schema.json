@@ -1,0 +1,27 @@
+{
+  "type": "object",
+  "properties": {
+    "tiles": {
+      "type": "array",
+      "maxItems": 12,
+      "items": {
+        "type": "object",
+        "properties": {
+          "i": { "type": "integer", "minimum": 1, "maximum": 12 },
+          "who": { "type": "array", "items": { "type": "string", "enum": ["lucia", "jason", "other_people", "nobody"] } },
+          "framing": { "type": "string", "enum": ["close", "medium", "wide", "aerial"] },
+          "time": { "type": "string", "enum": ["day", "golden", "night", "interior"] },
+          "place": { "type": "string", "maxLength": 80 },
+          "action": { "type": "string", "maxLength": 100 },
+          "text_on_screen": { "type": "boolean" },
+          "usable": { "type": "boolean" },
+          "description": { "type": "string", "maxLength": 240 }
+        },
+        "required": ["i", "who", "framing", "time", "place", "action", "text_on_screen", "usable", "description"],
+        "additionalProperties": false
+      }
+    }
+  },
+  "required": ["tiles"],
+  "additionalProperties": false
+}

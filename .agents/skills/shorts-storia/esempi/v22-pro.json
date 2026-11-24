@@ -1,0 +1,80 @@
+{
+ "id": "v22-pro",
+ "source": "/Users/micheleiliescu/Developer/pipeline-video-content-long-short/out/2026-11-22-18-23-35-3c6ce25b/Picking up lucia - ep 3.mp4",
+ "transcript": "/Users/micheleiliescu/Developer/pipeline-video-content-long-short/work/2026-11-22-18-23-35-3c6ce25b/02-transcribe/transcript.json",
+ "layout": "panel",
+ "header": "\"I'm a [pro], don't worry\"",
+ "segments": [
+  {
+   "s": 1310,
+   "e": 1318
+  },
+  {
+   "s": 1791,
+   "e": 1799,
+   "cx": 0.64
+  },
+  {
+   "s": 1799,
+   "e": 1806.5,
+   "cx": 0.62
+  },
+  {
+   "s": 1806.5,
+   "e": 1812.4
+  }
+ ],
+ "cards": [
+  {
+   "say": [
+    1310.1,
+    1317
+   ]
+  },
+  {
+   "tag": "*8 minutes later*",
+   "at": 1791.1,
+   "dur": 1.3,
+   "color": "#FFD23F"
+  },
+  {
+   "tag": "*reading texts on the highway*",
+   "at": 1792.4,
+   "dur": 3.0
+  },
+  {
+   "tag": "Drunk. Prison. Sex. \ud83d\udc80",
+   "at": 1795.5,
+   "dur": 2.6,
+   "color": "#FF5FA2"
+  },
+  {
+   "big": "OOPS",
+   "at": 1804.3,
+   "dur": 1.4
+  },
+  {
+   "say": [
+    1807.5,
+    1810.8
+   ]
+  }
+ ],
+ "flashes": [
+  {
+   "at": 1803.0,
+   "color": "#FF3B3B"
+  }
+ ],
+ "zooms": [
+  1795.5,
+  1803.0
+ ],
+ "shakes": [
+  1803.0
+ ],
+ "end": {
+  "text": "lesson learned (it was not)",
+  "dur": 1.6
+ }
+}

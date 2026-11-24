@@ -1,0 +1,131 @@
+{
+ "id": "v22-prison",
+ "source": "/Users/micheleiliescu/Developer/pipeline-video-content-long-short/out/2026-11-22-18-23-35-3c6ce25b/Picking up lucia - ep 3.mp4",
+ "transcript": "/Users/micheleiliescu/Developer/pipeline-video-content-long-short/work/2026-11-22-18-23-35-3c6ce25b/02-transcribe/transcript.json",
+ "layout": "panel",
+ "header": "she got out of prison [this morning]",
+ "segments": [
+  {
+   "s": 2523.5,
+   "e": 2529.5
+  },
+  {
+   "s": 3445.3,
+   "e": 3452.3
+  },
+  {
+   "s": 3492.5,
+   "e": 3501.5,
+   "lift": true
+  },
+  {
+   "s": 3505,
+   "e": 3510,
+   "lift": true
+  },
+  {
+   "s": 3541.5,
+   "e": 3549.5,
+   "lift": true
+  },
+  {
+   "s": 3549.5,
+   "e": 3556,
+   "lift": true
+  },
+  {
+   "s": 3608.6,
+   "e": 3613.2,
+   "lift": true
+  }
+ ],
+ "cards": [
+  {
+   "tag": "\"done anything for your country lately?\"",
+   "at": 2523.6,
+   "dur": 2.2,
+   "color": "#FFFFFF"
+  },
+  {
+   "tag": "\"yeah, a nine month government job\"",
+   "at": 2527.0,
+   "dur": 1.6,
+   "color": "#FFFFFF"
+  },
+  {
+   "tag": "*(prison)*",
+   "at": 2528.6,
+   "dur": 0.9,
+   "color": "#FFD23F"
+  },
+  {
+   "tag": "\"what's the D stand for? Dickless?\"",
+   "at": 3445.5,
+   "dur": 2.9,
+   "color": "#FFFFFF"
+  },
+  {
+   "tag": "\"I'll hit a b*tch who deserves it\"",
+   "at": 3448.5,
+   "dur": 2.0,
+   "color": "#FFFFFF"
+  },
+  {
+   "tag": "\"then hit yourself, b*tch!\"",
+   "at": 3450.5,
+   "dur": 1.8,
+   "color": "#FF3B3B"
+  },
+  {
+   "say": [
+    3498.9,
+    3501.5
+   ]
+  },
+  {
+   "tag": "*guilty by association*",
+   "at": 3505.2,
+   "dur": 2.0
+  },
+  {
+   "tag": "*parole: violated*",
+   "at": 3544.5,
+   "dur": 1.6,
+   "color": "#FF3B3B"
+  },
+  {
+   "say": [
+    3548.6,
+    3556
+   ]
+  },
+  {
+   "tag": "\"you've been out like... ten minutes?\"",
+   "at": 3609.0,
+   "dur": 2.6,
+   "color": "#FFFFFF"
+  }
+ ],
+ "flashes": [
+  {
+   "at": 3506.0,
+   "color": "#FFFFFF"
+  },
+  {
+   "at": 3544.0,
+   "color": "#FF3B3B"
+  }
+ ],
+ "zooms": [
+  3506.0,
+  3544.0
+ ],
+ "shakes": [
+  3506.0,
+  3544.0
+ ],
+ "end": {
+  "text": "her parole officer is typing\u2026",
+  "dur": 1.6
+ }
+}

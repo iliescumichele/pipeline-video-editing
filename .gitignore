@@ -1,0 +1,23 @@
+# Reinstallabili con `bun run setup`, cancellati da `bun run clean`
+node_modules/
+python/.venv/
+models/
+.tools/
+
+# Risultati della pipeline
+work/
+out/
+
+.DS_Store
+
+# Dati della dashboard (notizie, script, voti, banco di prova): non si cancellano con clean
+data/
+
+# Impostazioni locali (c'è .env.example da copiare)
+.env
+
+# Generati
+__pycache__/
+*.pyc
+studio/.tanstack/
+.claude/settings.local.json
